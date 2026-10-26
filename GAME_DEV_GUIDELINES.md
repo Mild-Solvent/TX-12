@@ -135,6 +135,26 @@ frame at the capped `dt`.
 When the radio and the simulator disagree, believe the radio and code
 defensively around table lookups.
 
+## More lessons (second round of games)
+
+- **Physics must not depend on frame rate.** Doodle Jump's jump was ~20 px at the radio's 80 ms frames but 25 px
+  in tests, so the generator made gaps you couldn't reach. Integrate exactly (`y += vy*dt + G*dt*dt/2`) or use
+  fixed sub-steps, and derive level limits from the same physics with a safety margin.
+- **Hitbox = drawing.** Use the same function for "where is it drawn" and "where does it collide" (Crossy Road).
+- **Filled shapes can invert each other.** Draw with `FORCE` (solid black) / `ERASE` (solid white) and don't
+  overlap fills; the white "ghost" rectangles in Crossy Road came from this.
+- **Edge-detected buttons can lose presses.** For timing games read SA/SD as held/released every frame and take
+  the press as the released->held change (Rhythm); don't re-learn the rest position during play.
+- **Data folders.** Levels, songs, rules text and rarely used code go in `GAMES/<NAME>/*.lua`, loaded with
+  `loadScript` when needed and dropped afterwards. Show a clear message if the folder is missing.
+- **Cap every loop.** "Retry until it fits" loops get an attempt limit and a fallback (Battleship placement).
+- **Clock.** The TX12 MKII has a real-time clock, but if the date was never set `getDateTime()` reports year 2000.
+  Treat years before 2020 as "no clock" and fall back to in-game time.
+- **Off-screen drawing** (negative x/y) shows up in the original games too (Asteroids, Pong) and they run fine,
+  so the firmware clips it. Still, clip where it's cheap. The simulator counts these draws.
+- **Dino reset the radio once** (dropped to the main screen, battery read 0.5 V for a moment). Cause not proven;
+  Dino now clips all drawing and caps its lists.
+
 ## Testing before copying to the card
 
 `tools/tx12sim/run.js` runs every game under [fengari](https://github.com/fengari-lua/fengari)

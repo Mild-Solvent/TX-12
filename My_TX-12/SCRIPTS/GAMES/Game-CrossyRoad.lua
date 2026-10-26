@@ -16,7 +16,7 @@ local OFF = 16           -- loop x 0 is screen x -16
 local KEEP = 10          -- rows generated above the camera
 
 local state, lanes, lowRow, topRow, cam, camSpeed
-local px, prow, score, best, lastTime, armed, hopT, lastKind
+local px, prow, score, best, lastTime, armed, hopT, lastKind, cause
 
 -- true once per press of switch SA or SD. Works for buttons and toggles:
 -- a switch left in a new position for 0.5 s counts as its new rest.
@@ -102,28 +102,47 @@ local function init()
 end
 
 local function genLanes()
+  -- capped loops: at most 16 lanes made / dropped per frame
   local want = math.floor(cam) + KEEP
-  while topRow < want do
+  for i = 1, 16 do
+    if topRow >= want then break end
     topRow = topRow + 1
     lanes[topRow] = newLane(topRow)
   end
   local low = math.floor(cam) - 2
-  while lowRow < low do
+  for i = 1, 16 do
+    if lowRow >= low then break end
     lanes[lowRow] = nil
     lowRow = lowRow + 1
   end
 end
 
--- does screen interval [a, b) overlap lane object o (drawn twice for the wrap)?
-local function overlaps(o, a, b)
-  local sx = o.x - OFF
-  if a < sx + o.w and b > sx then return true end
-  sx = sx - LOOP
-  return a < sx + o.w and b > sx
+-- Drawing and collision share these, so a hit is exactly what you see.
+-- screen y of the top of lane r
+local function laneY(r)
+  return math.floor(LCD_H - T - (r - cam) * T + 0.5)
+end
+-- screen x of a lane object's left edge (k = 1: its wrapped copy)
+local function objX(o, k)
+  return math.floor(o.x) - OFF - k * LOOP
+end
+-- left column of the drawn chicken (6 px wide)
+local function chickX()
+  return math.floor(px) + 1
 end
 
-local function die()
+-- does screen column range [a, b) overlap the drawn object o?
+local function overlaps(o, a, b)
+  for k = 0, 1 do
+    local sx = objX(o, k)
+    if a < sx + o.w and b > sx then return true end
+  end
+  return false
+end
+
+local function die(why)
   state = "over"
+  cause = why
   if score > best then best = score end
   playTone(300, 300, 0, PLAY_NOW)
 end
@@ -188,44 +207,40 @@ local function update(dt)
     end
   end
 
-  if prow - cam < -0.5 then die() return end
+  if prow - cam < -0.5 then die("Too slow!") return end
   local ln = lanes[prow]
   if not ln then return end
+  -- the chicken is drawn 6 px wide at chickX(); its outer column on each
+  -- side is forgiven, so a hit needs at least 2 drawn pixels of overlap
+  local cx = chickX()
   if ln.kind == 1 then
     for _, o in ipairs(ln.objs) do
-      if overlaps(o, px + 1, px + 7) then
-        die()
+      if overlaps(o, cx + 1, cx + 5) then
+        die("Hit by a car")
         return
       end
     end
   elseif ln.kind == 2 and hopT <= 0 then
     local onLog = false
     for _, o in ipairs(ln.objs) do
-      if overlaps(o, px + 2, px + 6) then onLog = true end
+      if overlaps(o, cx + 1, cx + 5) then onLog = true end
     end
-    if not onLog then die() return end
+    if not onLog then die("Splash!") return end
     px = px + ln.v * dt
-    if px < -3 or px > (COLS - 1) * T + 3 then die() return end
+    if px < -3 or px > (COLS - 1) * T + 3 then die("Swept away") return end
   end
 end
 
--- filled rect clipped to the screen
+-- filled rect clipped to the screen; solid black unless ERASE is given,
+-- never XOR, so overlapping shapes cannot invert each other
 local function box(x, y, w, h, flags)
-  x = math.floor(x)
+  x, y = math.floor(x), math.floor(y)
   if x < 0 then w = w + x x = 0 end
+  if y < 0 then h = h + y y = 0 end
   if x + w > LCD_W then w = LCD_W - x end
-  if w > 0 and y >= 0 and y + h <= LCD_H then
-    lcd.drawFilledRectangle(x, y, w, h, flags or 0)
-  end
-end
-
-local function hbox(x, y, w, h)
-  x = math.floor(x)
-  if x < 0 or x + w > LCD_W or y < 0 or y + h > LCD_H then
-    box(x, y, w, h)
-    box(x + 1, y + 1, w - 2, h - 2, ERASE)
-  else
-    lcd.drawRectangle(x, y, w, h)
+  if y + h > LCD_H then h = LCD_H - y end
+  if w > 0 and h > 0 then
+    lcd.drawFilledRectangle(x, y, w, h, flags or FORCE)
   end
 end
 
@@ -234,13 +249,13 @@ local function draw()
   local base = math.floor(cam)
   for r = base - 1, base + 8 do
     local ln = lanes[r]
-    local y = math.floor(LCD_H - T - (r - cam) * T + 0.5)
+    local y = laneY(r)
     if ln and y > -T and y < LCD_H then
       if ln.kind == 0 then
         for c = 0, COLS - 1 do
-          if ln.trees[c] and y >= 0 and y + 7 <= LCD_H then
-            lcd.drawFilledRectangle(c * T + 2, y + 1, 4, 4)
-            lcd.drawFilledRectangle(c * T + 3, y + 5, 2, 2)
+          if ln.trees[c] then
+            box(c * T + 2, y + 1, 4, 4)
+            box(c * T + 3, y + 5, 2, 2)
           end
         end
       elseif ln.kind == 1 then
@@ -250,7 +265,7 @@ local function draw()
         end
         for _, o in ipairs(ln.objs) do
           for k = 0, 1 do
-            local sx = o.x - OFF - k * LOOP
+            local sx = objX(o, k)
             if sx < LCD_W and sx + o.w > 0 then
               box(sx, y + 1, o.w, 6)
               box(sx + (ln.v > 0 and o.w - 3 or 1), y + 2, 2, 4, ERASE)
@@ -264,28 +279,38 @@ local function draw()
         end
         for _, o in ipairs(ln.objs) do
           for k = 0, 1 do
-            local sx = o.x - OFF - k * LOOP
+            local sx = objX(o, k)
             if sx < LCD_W and sx + o.w > 0 then
+              -- white log with a black outline, all FORCE / ERASE
               box(sx, y + 1, o.w, 6, ERASE)
-              hbox(sx, y + 1, o.w, 6)
+              box(sx, y + 1, o.w, 1)
+              box(sx, y + 6, o.w, 1)
+              box(sx, y + 1, 1, 6)
+              box(sx + o.w - 1, y + 1, 1, 6)
             end
           end
         end
       end
     end
   end
-  -- the chicken
-  local y = math.floor(LCD_H - T - (prow - cam) * T + 0.5) + 1
+  -- the chicken: 6 px wide (same columns the hit test uses), comb, eye
+  local y = laneY(prow) + 1
   if hopT > 0 then y = y - 1 end
-  local x = math.floor(px) + 1
-  if y >= 0 and y + 6 <= LCD_H and x >= 0 and x + 6 <= LCD_W then
-    lcd.drawFilledRectangle(x, y, 6, 6, ERASE)
-    lcd.drawFilledRectangle(x + 1, y + 1, 4, 5)
-    lcd.drawPoint(x + 2, y)
-    lcd.drawPoint(x + 3, y)
-    lcd.drawFilledRectangle(x + 3, y + 2, 1, 1, ERASE)
-  end
-  lcd.drawNumber(LCD_W - 2, 1, score, RIGHT + INVERS)
+  local x = chickX()
+  box(x, y + 1, 6, 5)
+  box(x + 2, y, 2, 1)
+  box(x + 4, y + 2, 1, 1, ERASE)
+  box(LCD_W - 22, 0, 22, 9, ERASE)
+  lcd.drawNumber(LCD_W - 2, 1, score, RIGHT)
+end
+
+-- white panel with a black frame for messages, so text never inverts
+local function panel(y, h)
+  box(4, y, LCD_W - 8, h, ERASE)
+  box(4, y, LCD_W - 8, 1)
+  box(4, y + h - 1, LCD_W - 8, 1)
+  box(4, y, 1, h)
+  box(LCD_W - 5, y, 1, h)
 end
 
 local function run(event)
@@ -303,9 +328,10 @@ local function run(event)
   if state == "title" then
     genLanes()
     draw()
-    lcd.drawText(LCD_W / 2 - 34, 10, "CROSSY ROAD", MIDSIZE + INVERS)
-    lcd.drawText(4, 30, "Flick right stick", SMLSIZE + INVERS)
-    lcd.drawText(4, 40, "ENTER / SA to start", SMLSIZE + INVERS)
+    panel(6, 44)
+    lcd.drawText(18, 9, "CROSSY ROAD", MIDSIZE)
+    lcd.drawText(9, 26, "Flick right stick", SMLSIZE)
+    lcd.drawText(9, 37, "ENTER/SA to start", SMLSIZE)
     if press then
       reset()
       genLanes()
@@ -317,9 +343,12 @@ local function run(event)
     draw()
   else
     draw()
-    lcd.drawText(LCD_W / 2 - 28, 10, "GAME OVER", MIDSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 36, 30, "Row " .. score .. "  Best " .. best, SMLSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 30, 42, "ENTER to retry", SMLSIZE + INVERS)
+    -- keep the panel off the chicken's lane so the crash stays visible
+    local py = (laneY(prow) <= 28) and 37 or 1
+    panel(py, 26)
+    lcd.drawText(9, py + 2, cause or "GAME OVER", SMLSIZE)
+    lcd.drawText(9, py + 10, "Row " .. score .. "  Best " .. best, SMLSIZE)
+    lcd.drawText(9, py + 18, "ENTER to retry", SMLSIZE)
     if event == EVT_VIRTUAL_ENTER then
       reset()
       genLanes()

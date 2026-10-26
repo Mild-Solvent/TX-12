@@ -3,20 +3,25 @@
 -- Virtual pet for 128x64 B&W EdgeTX radios (TX12, Zorro, X7)
 --
 -- Wheel: pick Feed / Play / Sleep, ENTER: do it
--- SA: feed   SD: play          Exit: RTN / EXIT (saves)
--- Food, Joy and Energy drop in real time, also while closed
--- (needs the radio clock). Saved in /SCRIPTS/GAMES/pet.dat
+-- SA: feed   SD: play (mini-games)   Exit: RTN / EXIT (saves)
+-- Radio clock set: the pet lives in real time, also while closed.
+-- Clock not set (shows year 2000): it lives only while the game
+-- is open, 20x faster. Saved in /SCRIPTS/GAMES/pet.dat
+-- Mini-games: /SCRIPTS/GAMES/PET/mini.lua (loaded on demand)
 ---------------------------------------------------------------
 
 local PATH = "/SCRIPTS/GAMES/pet.dat"
+local MINI = "/SCRIPTS/GAMES/PET/mini.lua"
 local SAVE_EVERY = 30       -- s
 local MAX_AWAY = 7 * 86400  -- s of offline time counted at most
 local DIE_AFTER = 24        -- h starving before the pet dies
-local HATCH = 10            -- s an egg takes to hatch
+local HATCH = 10            -- real s an egg takes to hatch
+local FAST = 20             -- pet time pace without a clock
 
 -- pet: food, joy, energy 0..100; age s; starve h; asleep, alive 0/1
-local food, joy, energy, age, starve, asleep, alive
-local sel, msg, msgT, saveT, animT, lastTime, haveClock
+local food, joy, energy, age, starve, asleep, alive, told
+local sel, msg, msgT, saveT, animT, lastTime, haveClock, pace
+local mode, msel, mini      -- mode: "pet", "info", "menu", "mini"
 
 local function daysFromCivil(y, m, d)
   if m <= 2 then y = y - 1 end
@@ -28,7 +33,8 @@ local function daysFromCivil(y, m, d)
   return era * 146097 + doe
 end
 
--- seconds since 2020-01-01 from the radio clock, nil if no usable clock
+-- seconds since 2020-01-01 from the radio clock; nil if there is
+-- none or it was never set (EdgeTX starts an unset clock at 2000)
 local function clockNow()
   if getDateTime == nil then return nil end
   local ok, t = pcall(getDateTime)
@@ -50,10 +56,14 @@ local function clamp(v)
   return v
 end
 
--- advance the pet by sec seconds
+local function isEgg()
+  return age < HATCH * pace
+end
+
+-- advance the pet by sec seconds of pet time
 local function tick(sec)
   age = age + sec
-  if alive == 0 or age < HATCH then return end
+  if alive == 0 or isEgg() then return end
   local h = sec / 3600
   if asleep == 1 then
     food = food - 3 * h
@@ -80,7 +90,8 @@ local function save()
   local t = clockNow() or 0
   local s = "1 " .. math.floor(food * 100) .. " " .. math.floor(joy * 100) .. " " ..
     math.floor(energy * 100) .. " " .. math.floor(age) .. " " ..
-    math.floor(starve * 100) .. " " .. asleep .. " " .. alive .. " " .. math.floor(t) .. "\n"
+    math.floor(starve * 100) .. " " .. asleep .. " " .. alive .. " " .. math.floor(t) ..
+    " " .. told .. "\n"
   pcall(function()
     local f = io.open(PATH, "w")
     if f then
@@ -101,6 +112,7 @@ local function load()
     end
   end)
   newPet()
+  told = 0
   if type(data) ~= "string" then return end
   local v = {}
   for n in string.gmatch(data, "%-?%d+") do v[#v + 1] = tonumber(n) end
@@ -109,26 +121,31 @@ local function load()
   age, starve = v[5], v[6] / 100
   asleep = (v[7] == 1) and 1 or 0
   alive = (v[8] == 0) and 0 or 1
+  if v[10] == 1 then told = 1 end
   local now = clockNow()
   if now and v[9] > 0 then
     local away = now - v[9]
     if away < 0 then away = 0 end
     if away > MAX_AWAY then away = MAX_AWAY end
-    while away > 0 do            -- 10 min steps so starving is counted right
+    local n = 0
+    while away > 0 and n < 1100 do  -- 10 min steps so starving is counted right
       local s = away
       if s > 600 then s = 600 end
       tick(s)
       away = away - s
+      n = n + 1
     end
   end
 end
 
 local function init()
   haveClock = clockNow() ~= nil
+  pace = haveClock and 1 or FAST
   load()
-  sel, msg, msgT, saveT, animT = 1, "", 0, 0, 0
+  sel, msel, msg, msgT, saveT, animT = 1, 1, "", 0, 0, 0
+  mode = "pet"
   lastTime = getTime()
-  if not haveClock then msg = "No clock: no aging" ; msgT = 4 end
+  if not haveClock and told == 0 then mode = "info" end
   save()
 end
 
@@ -136,9 +153,20 @@ local function say(s)
   msg, msgT = s, 2.5
 end
 
+local function playDone(won)
+  local j = won and 30 or 12
+  joy = clamp(joy + j)
+  energy = clamp(energy - 8)
+  food = clamp(food - 4)
+  say((won and "You won! " or "Fun! ") .. "Joy +" .. j)
+  playTone(2000, 40, 0, PLAY_NOW)
+  playTone(2600, 40, 60, 0)
+  save()
+end
+
 local function act(a)
   if alive == 0 then return end
-  if age < HATCH then say("It's still an egg") return end
+  if isEgg() then say("It's still an egg") return end
   if a == 3 then
     asleep = 1 - asleep
     say((asleep == 1) and "Good night" or "Good morning!")
@@ -153,14 +181,32 @@ local function act(a)
     playTone(1500, 60, 0, PLAY_NOW)
   else
     if energy < 10 then say("Too tired") return end
-    joy = clamp(joy + 20)
-    energy = clamp(energy - 8)
-    food = clamp(food - 4)
-    say("Wheee!")
-    playTone(2000, 40, 0, PLAY_NOW)
-    playTone(2600, 40, 60, 0)
+    mode, msel = "menu", 1
+    return
   end
   save()
+end
+
+local function startMini(k)
+  local ok, m = pcall(function()
+    local chunk = loadScript(MINI)
+    return chunk and chunk()
+  end)
+  if ok and type(m) == "table" and m.start then
+    mini = m
+    mini.start(k)
+    mode = "mini"
+  else
+    mode = "pet"       -- no mini-game file: a plain play
+    playDone(false)
+  end
+end
+
+local function endMini(won)
+  mini = nil
+  collectgarbage()
+  mode = "pet"
+  if won ~= nil then playDone(won) end
 end
 
 -- "sa" / "sd" once per press (buttons and toggles)
@@ -192,7 +238,7 @@ end
 
 local function mood()
   if alive == 0 then return "R.I.P." end
-  if age < HATCH then return "Egg" end
+  if isEgg() then return "Egg" end
   if asleep == 1 then return "Sleeping" end
   if food < 30 then return "Hungry" end
   if energy < 25 then return "Sleepy" end
@@ -228,8 +274,8 @@ local function drawPet(m, frame)
   line(x + 20, y, x + 22, y + 2)
   -- feet, stepping
   local f = (frame == 0) and 1 or 0
-  lcd.drawFilledRectangle(x + 5, y + 20, 4, 2 - f)
-  lcd.drawFilledRectangle(x + 16, y + 20, 4, 1 + f)
+  lcd.drawFilledRectangle(x + 5, y + 20, 4, 2 - f, FORCE)
+  lcd.drawFilledRectangle(x + 16, y + 20, 4, 1 + f, FORCE)
   -- eyes
   if m == "R.I.P." then
     line(x + 6, y + 7, x + 9, y + 10); line(x + 9, y + 7, x + 6, y + 10)
@@ -238,8 +284,8 @@ local function drawPet(m, frame)
     line(x + 6, y + 9, x + 9, y + 9)
     line(x + 16, y + 9, x + 19, y + 9)
   else
-    lcd.drawFilledRectangle(x + 7, y + 7, 2, 3)
-    lcd.drawFilledRectangle(x + 17, y + 7, 2, 3)
+    lcd.drawFilledRectangle(x + 7, y + 7, 2, 3, FORCE)
+    lcd.drawFilledRectangle(x + 17, y + 7, 2, 3, FORCE)
   end
   -- mouth
   if m == "Happy" then
@@ -265,11 +311,31 @@ local function bar(x, label, v)
   lcd.drawText(x, 0, label, SMLSIZE)
   lcd.drawRectangle(x + 7, 1, 32, 6)
   local w = math.floor(v * 30 / 100)
-  if w > 0 then lcd.drawFilledRectangle(x + 8, 2, w, 4) end
+  if w > 0 then lcd.drawFilledRectangle(x + 8, 2, w, 4, FORCE) end
+end
+
+local function drawInfo()
+  lcd.drawText(64, 1, "Hello!", SMLSIZE + CENTER + INVERS)
+  lcd.drawText(1, 11, "Radio clock not set:", SMLSIZE)
+  lcd.drawText(1, 19, "your pet lives only", SMLSIZE)
+  lcd.drawText(1, 27, "while this game is", SMLSIZE)
+  lcd.drawText(1, 35, "open (time runs 20x).", SMLSIZE)
+  lcd.drawText(1, 44, "Tip: Radio Setup>Date", SMLSIZE)
+  lcd.drawText(64, 55, "ENTER: OK", SMLSIZE + CENTER + BLINK)
+end
+
+local function drawMenu()
+  lcd.drawText(64, 1, "Play a game!", SMLSIZE + CENTER + INVERS)
+  for i = 1, 4 do
+    local t = "Which way?"
+    if i == 2 then t = "Catch treats" elseif i == 3 then t = "Stop the bar"
+    elseif i == 4 then t = "Back" end
+    lcd.drawText(30, 4 + i * 10, t, SMLSIZE + ((i == msel) and INVERS or 0))
+  end
+  lcd.drawText(64, 56, "Wheel + ENTER", SMLSIZE + CENTER)
 end
 
 local function draw()
-  lcd.clear()
   bar(0, "F", food)
   bar(43, "J", joy)
   bar(86, "E", energy)
@@ -301,7 +367,7 @@ local function run(event)
   end
 
   local now = getTime()
-  local real = (now - lastTime) / 100   -- pet ages in real time
+  local real = (now - lastTime) / 100
   lastTime = now
   if real < 0 then real = 0 end
   if real > 60 then real = 60 end
@@ -310,9 +376,9 @@ local function run(event)
   animT = animT + dt
   if msgT > 0 then msgT = msgT - dt end
 
-  local wasEgg = age < HATCH
-  tick(real)
-  if wasEgg and age >= HATCH and alive == 1 then
+  local wasEgg = isEgg()
+  tick(real * pace)
+  if wasEgg and not isEgg() and alive == 1 then
     say("It hatched!")
     playTone(2000, 100, 0, PLAY_NOW)
     playTone(3000, 150, 120, 0)
@@ -320,23 +386,44 @@ local function run(event)
   end
 
   local sw = switchPress()
-  if alive == 0 then
-    if event == EVT_VIRTUAL_ENTER then
-      newPet()
-      say("A new egg!")
+  lcd.clear()
+  if mode == "info" then
+    if event == EVT_VIRTUAL_ENTER or sw then
+      told, mode = 1, "pet"
       save()
     end
+    drawInfo()
+  elseif mode == "menu" then
+    if event == EVT_VIRTUAL_NEXT then msel = (msel % 4) + 1 end
+    if event == EVT_VIRTUAL_PREV then msel = ((msel + 2) % 4) + 1 end
+    if event == EVT_VIRTUAL_ENTER then
+      if msel == 4 then mode = "pet" else startMini(msel) end
+    end
+    if mode == "menu" then drawMenu()
+    elseif mode == "mini" and mini then mini.draw()
+    else draw() end
+  elseif mode == "mini" and mini then
+    local res = mini.step(event, sw, dt)
+    if res == nil then mini.draw() else endMini(res == 1); draw() end
   else
-    if event == EVT_VIRTUAL_NEXT then sel = (sel % 3) + 1 end
-    if event == EVT_VIRTUAL_PREV then sel = ((sel + 1) % 3) + 1 end
-    if event == EVT_VIRTUAL_ENTER then act(sel) end
-    if sw == "sa" then act(1) elseif sw == "sd" then act(2) end
+    mode = "pet"
+    if alive == 0 then
+      if event == EVT_VIRTUAL_ENTER then
+        newPet()
+        say("A new egg!")
+        save()
+      end
+    else
+      if event == EVT_VIRTUAL_NEXT then sel = (sel % 3) + 1 end
+      if event == EVT_VIRTUAL_PREV then sel = ((sel + 1) % 3) + 1 end
+      if event == EVT_VIRTUAL_ENTER then act(sel) end
+      if sw == "sa" then act(1) elseif sw == "sd" then act(2) end
+    end
+    if mode == "pet" then draw() elseif mode == "menu" then drawMenu() end
   end
 
   saveT = saveT + real
   if saveT >= SAVE_EVERY then save() end
-
-  draw()
   return 0
 end
 

@@ -1,19 +1,18 @@
 -- toolName = TNS|Tower Defense|TNE
 ---------------------------------------------------------------
 -- Tower Defense (single lane) for 128x64 B&W EdgeTX radios
---
--- Cursor: right stick (flick, or hold to repeat)
--- Build:  SA / SD / ENTER on an empty tile ($15)
--- Upgrade: same on a tower ($20, then $30)
--- Creeps follow the dotted road; each one that gets out
--- costs a life. Waves grow bigger, tougher and faster.
--- Exit:   RTN / EXIT
+-- Cursor: right stick   Wheel: tower type
+-- SA: build   SD: upgrade   hold ENTER: sell
+-- BUILD phase: ENTER starts the next wave.
+-- WAVE phase: building still allowed (ENTER = build too).
+-- Towers: GUN cheap/fast, CAN splash, ICE slows, SNP long range
+-- Creeps: normal, runner, armored tank, swarm, boss every 5
 ---------------------------------------------------------------
 
-local T = 8                -- tile size
-local GC, GR = 16, 7       -- grid below the 8 px status line
-local TOP = 8
-local COST, UP2, UP3 = 15, 20, 30
+local T, GC, GR, TOP = 8, 16, 7, 8
+local floor, abs = math.floor, math.abs
+local fill, rect, line, text   -- lcd functions, set in init()
+local SAVE = "/SCRIPTS/GAMES/towerdef.dat"
 
 -- EdgeTX on B&W radios has no table library
 local function removeAt(t, i)
@@ -21,29 +20,50 @@ local function removeAt(t, i)
   t[#t] = nil
 end
 
-local state, grid, towers, enemies, pathX, pathY, segLen, pathLen
-local money, lives, wave, best, toSpawn, spawnT, breakT, lastTime
-local cx, cy, armed, holdT, msgT
+local state, phase, grid, towers, enemies, queue, qi, pathX, pathY, segLen, pathLen
+local money, lives, wave, best, spawnT, lastTime, preview
+local cx, cy, armed, holdT, msg, msgT, sel, longT
 
--- true once per press of switch SA or SD. Works for buttons and toggles:
--- a switch left in a new position for 0.5 s counts as its new rest.
-local SWITCHES = { "sa", "sd" }
+-- "sa" / "sd" once per press; a position held 0.5 s becomes the new rest
 local swLast, swRest, swSince = {}, {}, {}
+local function swCheck(n, now)
+  local v = getValue(n)
+  if swLast[n] == nil then
+    swLast[n], swRest[n], swSince[n] = v, v, now
+  elseif v ~= swLast[n] then
+    swLast[n], swSince[n] = v, now
+    if v ~= swRest[n] then return true end
+  elseif v ~= swRest[n] and now - swSince[n] > 50 then
+    swRest[n] = v
+  end
+  return false
+end
 local function switchPress()
   local now = getTime()
-  local pressed = false
-  for _, n in ipairs(SWITCHES) do
-    local v = getValue(n)
-    if swLast[n] == nil then
-      swLast[n], swRest[n], swSince[n] = v, v, now
-    elseif v ~= swLast[n] then
-      if v ~= swRest[n] then pressed = true end
-      swLast[n], swSince[n] = v, now
-    elseif v ~= swRest[n] and now - swSince[n] > 50 then
-      swRest[n] = v
-    end
-  end
-  return pressed
+  local a = swCheck("sa", now)
+  local d = swCheck("sd", now)
+  if a then return "sa" end
+  if d then return "sd" end
+  return nil
+end
+
+-- tower types 1..4 ------------------------------------------------
+local function tName(ty) return string.sub("GUNCANICESNP", ty * 3 - 2, ty * 3) end
+local function tCost(ty)
+  if ty == 2 then return 30 elseif ty == 3 then return 25 elseif ty == 4 then return 40 end
+  return 15
+end
+-- range, reload, damage
+local function tStats(ty, l)
+  if ty == 2 then return 17, 1.5 - l * 0.15, 1 + l end
+  if ty == 3 then return 14 + l * 2, 1.0, (l >= 3) and 1 or 0 end
+  if ty == 4 then return 34 + l * 6, 1.8 - l * 0.2, 2 + l * 2 end
+  return 17 + l, 0.55 - l * 0.08, 1 + floor(l / 2)
+end
+local function upCost(t)
+  if t.lvl >= 3 then return nil end
+  local c = tCost(t.ty)
+  return c + floor((t.lvl - 1) * c / 2)
 end
 
 local function cell(c, r)
@@ -55,19 +75,15 @@ end
 local function buildPath()
   pathX = { -4, 116, 116, 12, 12, 132 }
   pathY = { 20, 20, 36, 36, 52, 52 }
-  segLen = {}
-  pathLen = 0
-  grid = {}
+  segLen, pathLen, grid = {}, 0, {}
   for i = 1, GC * GR do grid[i] = 0 end
   for i = 1, #pathX - 1 do
     local dx, dy = pathX[i + 1] - pathX[i], pathY[i + 1] - pathY[i]
-    local d = math.abs(dx) + math.abs(dy)   -- segments are straight
+    local d = abs(dx) + abs(dy)
     segLen[i] = d
     pathLen = pathLen + d
     for s = 0, d, 4 do
-      local x = pathX[i] + dx * s / d
-      local y = pathY[i] + dy * s / d
-      local k = cell(math.floor(x / T), math.floor((y - TOP) / T))
+      local k = cell(floor((pathX[i] + dx * s / d) / T), floor((pathY[i] + dy * s / d - TOP) / T))
       if k then grid[k] = 1 end
     end
   end
@@ -87,75 +103,116 @@ local function placeEnemy(e)
   end
 end
 
+-- wave mix: normal, runner, tank, swarm, boss
+local function mix(w)
+  local n, f, t, s, b = 3 + w, 0, 0, 0, 0
+  if w >= 2 then f = floor(w / 2) + 1 end
+  if w >= 3 then t = floor(w / 3) end
+  if w % 5 == 0 then
+    b = floor(w / 5); n = floor(n / 2)
+  elseif w >= 4 and w % 2 == 0 then
+    s = 4 + w
+  end
+  return n, f, t, s, b
+end
+
+local function makePreview(w)
+  local n, f, t, s, b = mix(w)
+  local p = n .. "nrm"
+  if f > 0 then p = p .. " " .. f .. "run" end
+  if t > 0 then p = p .. " " .. t .. "tnk" end
+  if s > 0 then p = p .. " " .. s .. "swm" end
+  if b > 0 then p = p .. " " .. b .. "BOSS" end
+  preview = p
+end
+
+local function say(s, t) msg, msgT = s, t end
+
 local function reset()
-  towers, enemies = {}, {}
-  money, lives, wave = 40, 10, 0
-  toSpawn, spawnT, breakT = 0, 0, 3
+  towers, enemies, queue = {}, {}, {}
+  money, lives, wave, qi = 60, 10, 0, 1
+  spawnT, msgT, longT = 0, 0, 0
   cx, cy = 7, 2
-  msgT = 0
+  phase = "build"
   for i = 1, GC * GR do
     if grid[i] ~= 1 then grid[i] = 0 end
   end
+  makePreview(1)
 end
 
 local function init()
+  fill, rect, line, text = lcd.drawFilledRectangle, lcd.drawRectangle, lcd.drawLine, lcd.drawText
   math.randomseed(getTime())
   buildPath()
   best = 0
-  state = "title"
+  pcall(function()
+    local f = io.open(SAVE, "r")
+    if f then
+      best = tonumber(io.read(f, 8)) or 0
+      io.close(f)
+    end
+  end)
+  state, sel = "title", 1
   armed, holdT = true, 0
   lastTime = getTime()
   reset()
 end
 
+local function saveBest()
+  pcall(function()
+    local f = io.open(SAVE, "w")
+    if f then io.write(f, tostring(best)); io.close(f) end
+  end)
+end
+
 local function towerAt(c, r)
-  for _, t in ipairs(towers) do
-    if t.c == c and t.r == r then return t end
+  for i, t in ipairs(towers) do
+    if t.c == c and t.r == r then return t, i end
   end
   return nil
 end
 
-local function towerStats(t)
-  if t.lvl >= 3 then return 25, 0.4, 2 end
-  if t.lvl == 2 then return 22, 0.5, 1 end
-  return 18, 0.7, 1
-end
-
-local function upCost(t)
-  if t.lvl == 1 then return UP2 end
-  if t.lvl == 2 then return UP3 end
-  return nil
-end
-
-local function build()
+local function buildHere()
   local k = cell(cx, cy)
-  if not k then return end
-  if grid[k] == 0 then
-    if money >= COST then
-      money = money - COST
-      grid[k] = 2
-      towers[#towers + 1] = { c = cx, r = cy, x = cx * T + 4, y = TOP + cy * T + 4,
-                              lvl = 1, cd = 0, fx = 0, fy = 0, flash = 0 }
-      playTone(1500, 40, 0, PLAY_NOW)
-      return
-    end
-  elseif grid[k] == 2 then
-    local t = towerAt(cx, cy)
-    local c = t and upCost(t)
-    if c and money >= c then
-      money = money - c
-      t.lvl = t.lvl + 1
-      playTone(2200, 60, 0, PLAY_NOW)
-      return
-    end
+  local c = tCost(sel)
+  if k and grid[k] == 0 and money >= c then
+    money = money - c
+    grid[k] = 2
+    towers[#towers + 1] = { c = cx, r = cy, x = cx * T + 4, y = TOP + cy * T + 4, ty = sel,
+                            lvl = 1, spent = c, cd = 0, fx = 0, fy = 0, flash = 0 }
+    playTone(1500, 40, 0, PLAY_NOW)
+  else
+    playTone(200, 60, 0, PLAY_NOW)
   end
-  playTone(200, 60, 0, PLAY_NOW)
+end
+
+local function upgradeHere()
+  local t = towerAt(cx, cy)
+  local c = t and upCost(t)
+  if c and money >= c then
+    money = money - c
+    t.lvl = t.lvl + 1
+    t.spent = t.spent + c
+    playTone(2200, 60, 0, PLAY_NOW)
+  else
+    playTone(200, 60, 0, PLAY_NOW)
+  end
+end
+
+local function sellHere()
+  local t, i = towerAt(cx, cy)
+  if not t then return end
+  money = money + floor(t.spent / 2)
+  local k = cell(t.c, t.r)
+  if k then grid[k] = 0 end
+  removeAt(towers, i)
+  playTone(700, 80, 0, PLAY_NOW)
 end
 
 -- cursor: flick the right stick, hold it to repeat
 local function moveCursor(dt)
   local ax, ay = getValue("ail"), getValue("ele")
-  if math.abs(ax) < 300 and math.abs(ay) < 300 then
+  if abs(ax) < 300 and abs(ay) < 300 then
     armed = true
     return
   end
@@ -167,7 +224,7 @@ local function moveCursor(dt)
     if holdT <= 0 then go, holdT = true, 0.12 end
   end
   if not go then return end
-  if math.abs(ay) >= math.abs(ax) then
+  if abs(ay) >= abs(ax) then
     if ay > 600 and cy > 0 then cy = cy - 1 end
     if ay < -600 and cy < GR - 1 then cy = cy + 1 end
   else
@@ -178,71 +235,126 @@ end
 
 local function startWave()
   wave = wave + 1
-  toSpawn = 4 + 2 * wave
-  spawnT = 0
-  msgT = 1.5
+  queue, qi, spawnT = {}, 1, 0
+  local n, f, t, s, b = mix(wave)
+  local m = math.max(n, f, t)
+  local mid = math.ceil(m / 2)
+  for i = 1, m do
+    if i <= n then queue[#queue + 1] = 1 end
+    if i <= f then queue[#queue + 1] = 2 end
+    if i <= t then queue[#queue + 1] = 3 end
+    if i == mid then for j = 1, s do queue[#queue + 1] = 4 end end
+  end
+  for i = 1, b do queue[#queue + 1] = 5 end
+  phase = "wave"
+  say(b > 0 and "BOSS WAVE " .. wave .. "!" or "WAVE " .. wave .. " - GO!", 1.5)
+  playTone(1000, 150, 0, PLAY_NOW)
 end
 
-local function spawn()
-  local hp = 1 + math.floor(wave * 0.8 + wave * wave / 10)
-  local v = math.min(26, 12 + wave * 0.8) + math.random() * 3 - 1.5
-  local e = { d = 0, hp = hp, max = hp, v = v, x = 0, y = 0 }
+-- spawns kind k, returns the gap before the next one
+local function spawnE(k)
+  local h = 2 + wave + wave * wave / 9
+  local v = math.min(24, 11 + wave * 0.6)
+  local gap = math.max(0.5, 1.1 - wave * 0.04)
+  if k == 2 then h, v, gap = h * 0.5, v * 1.7, 0.55
+  elseif k == 3 then h, v, gap = h * 3, v * 0.6, 1.3
+  elseif k == 4 then h, v, gap = h * 0.35, v * 1.1, 0.22
+  elseif k == 5 then h, v, gap = h * 12, v * 0.5, 2.5 end
+  h = math.max(1, floor(h))
+  local e = { d = 0, hp = h, max = h, k = k, v = v * (0.93 + math.random() * 0.14),
+              slow = 0, sf = 1, x = 0, y = 0 }
   placeEnemy(e)
   enemies[#enemies + 1] = e
+  return gap
+end
+
+local function hurt(e, dmg, ty)
+  if e.hp <= 0 then return end
+  if ty == 1 and e.k == 3 then dmg = dmg * 0.5 end   -- tank armor vs gun
+  e.hp = e.hp - dmg
+  if e.hp <= 0 then
+    local b = 2
+    if e.k == 3 then b = 5 elseif e.k == 4 then b = 1 elseif e.k == 5 then b = 30 end
+    money = money + b + floor(wave / 4)
+    playTone(900, 25, 0, PLAY_NOW)
+  end
+end
+
+local function fire(t)
+  local rng, rate, dmg = tStats(t.ty, t.lvl)
+  local r2 = rng * rng
+  if t.ty == 3 then
+    local any = false
+    local f = 0.65 - 0.1 * t.lvl
+    for _, e in ipairs(enemies) do
+      local dx, dy = e.x - t.x, e.y - t.y
+      if e.hp > 0 and dx * dx + dy * dy <= r2 then
+        any = true
+        local ff = f
+        if e.k == 5 then ff = (f + 1) / 2 end
+        if e.slow <= 0 or ff < e.sf then e.sf = ff end
+        e.slow = 1.5
+        if dmg > 0 then hurt(e, dmg, 3) end
+      end
+    end
+    if any then t.cd, t.flash = rate, 0.1 end
+    return
+  end
+  local tgt = nil
+  for _, e in ipairs(enemies) do
+    local dx, dy = e.x - t.x, e.y - t.y
+    if e.hp > 0 and dx * dx + dy * dy <= r2 then
+      if not tgt or (t.ty == 4 and e.hp > tgt.hp) or (t.ty ~= 4 and e.d > tgt.d) then tgt = e end
+    end
+  end
+  if not tgt then return end
+  t.cd = rate
+  t.fx, t.fy, t.flash = tgt.x, tgt.y, 0.08
+  if t.ty == 2 then
+    local tx, ty = tgt.x, tgt.y
+    for _, e in ipairs(enemies) do
+      local dx, dy = e.x - tx, e.y - ty
+      if dx * dx + dy * dy <= 81 then hurt(e, dmg, 2) end
+    end
+  else
+    hurt(tgt, dmg, t.ty)
+  end
 end
 
 local function update(dt)
-  -- waves
-  if toSpawn == 0 and #enemies == 0 then
-    breakT = breakT - dt
-    if breakT <= 0 then startWave() end
-  elseif toSpawn > 0 then
+  if msgT > 0 then msgT = msgT - dt end
+  if longT > 0 then longT = longT - dt end
+  for _, t in ipairs(towers) do
+    if t.flash > 0 then t.flash = t.flash - dt end
+  end
+  if phase ~= "wave" then return end
+
+  if qi <= #queue then
     spawnT = spawnT - dt
     if spawnT <= 0 then
-      spawn()
-      toSpawn = toSpawn - 1
-      spawnT = math.max(0.45, 1.2 - wave * 0.06)
-      if toSpawn == 0 then breakT = 4 end
+      local k = queue[qi] or 1
+      qi = qi + 1
+      spawnT = spawnE(k)
     end
   end
-  if msgT > 0 then msgT = msgT - dt end
 
-  -- move creeps
   for _, e in ipairs(enemies) do
-    e.d = e.d + e.v * dt
+    local v = e.v
+    if e.slow > 0 then
+      e.slow = e.slow - dt
+      v = v * e.sf
+    end
+    e.d = e.d + v * dt
     if e.d >= pathLen then
-      e.hp = 0
-      e.out = true
+      e.hp, e.out = 0, true
     else
       placeEnemy(e)
     end
   end
 
-  -- towers fire at the creep furthest along the road
   for _, t in ipairs(towers) do
-    if t.flash > 0 then t.flash = t.flash - dt end
     t.cd = t.cd - dt
-    if t.cd <= 0 then
-      local rng, rate, dmg = towerStats(t)
-      local tgt = nil
-      for _, e in ipairs(enemies) do
-        if e.hp > 0 then
-          local dx, dy = e.x - t.x, e.y - t.y
-          if dx * dx + dy * dy <= rng * rng and (not tgt or e.d > tgt.d) then
-            tgt = e
-          end
-        end
-      end
-      if tgt then
-        tgt.hp = tgt.hp - dmg
-        t.cd = rate
-        t.fx, t.fy, t.flash = tgt.x, tgt.y, 0.07
-        if tgt.hp <= 0 then
-          money = money + 2 + math.floor(wave / 3)
-          playTone(900, 25, 0, PLAY_NOW)
-        end
-      end
-    end
+    if t.cd <= 0 then fire(t) end
   end
 
   -- sweep dead and escaped creeps (nothing else is walking the list now)
@@ -250,23 +362,25 @@ local function update(dt)
     local e = enemies[i]
     if e.hp <= 0 then
       if e.out then
-        lives = lives - 1
+        lives = lives - ((e.k == 5) and 5 or 1)
         playTone(300, 120, 0, PLAY_NOW)
       end
       removeAt(enemies, i)
     end
   end
 
-  if toSpawn == 0 and #enemies == 0 and breakT == 4 then
-    money = money + 5 + wave
-    breakT = 3.99
-  end
-
   if lives <= 0 then
-    lives = 0
-    state = "over"
-    if wave > best then best = wave end
+    lives, state = 0, "over"
+    if wave - 1 > best then best = wave - 1; saveBest() end
     playTone(250, 500, 0, PLAY_NOW)
+  elseif qi > #queue and #enemies == 0 then
+    local b = 8 + 2 * wave
+    money = money + b
+    phase = "build"
+    if wave > best then best = wave; saveBest() end
+    makePreview(wave + 1)
+    say("WAVE CLEAR! +$" .. b, 2)
+    playTone(1800, 200, 0, PLAY_NOW)
   end
 end
 
@@ -276,61 +390,109 @@ local function clampX(x)
   return x
 end
 
+local function drawTower(t)
+  local x, y = t.c * T + 1, TOP + t.r * T
+  local ty = t.ty
+  if ty == 1 then
+    rect(x, y + 1, 6, 6)
+    fill(x + 2, y + 3, 2, 2, FORCE)
+  elseif ty == 2 then
+    fill(x, y + 1, 6, 6, FORCE)
+    fill(x + 2, y + 3, 2, 2, ERASE)
+  elseif ty == 3 then
+    line(x, y + 1, x + 5, y + 6, SOLID, FORCE)
+    line(x + 5, y + 1, x, y + 6, SOLID, FORCE)
+  else
+    line(x, y + 6, x + 5, y + 6, SOLID, FORCE)
+    line(x, y + 6, x + 2, y + 1, SOLID, FORCE)
+    line(x + 3, y + 1, x + 5, y + 6, SOLID, FORCE)
+  end
+  for i = 2, t.lvl do
+    local px = x + (i - 2) * 3
+    line(px, y + 7, px + 1, y + 7, SOLID, FORCE)
+  end
+  if t.flash > 0 then
+    if ty == 3 then
+      local r = tStats(3, t.lvl)
+      local x0, y0 = math.max(0, t.x - r), math.max(TOP, t.y - r)
+      local x1, y1 = math.min(LCD_W - 1, t.x + r), math.min(LCD_H - 1, t.y + r)
+      rect(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+    else
+      local fx, fy = floor(t.fx), floor(t.fy)
+      if fx >= 0 and fx < LCD_W and fy >= TOP and fy < LCD_H then
+        line(t.x, t.y, fx, fy, SOLID, FORCE)
+        if ty == 2 and fx >= 3 and fx <= LCD_W - 4 then rect(fx - 3, fy - 3, 7, 7) end
+      end
+    end
+  end
+end
+
+local function drawEnemy(e)
+  local x, y = floor(e.x), floor(e.y)
+  if x < 4 or x > LCD_W - 5 then return end
+  local k = e.k
+  if k == 2 then
+    fill(x - 2, y - 1, 5, 2, FORCE)
+  elseif k == 3 then
+    rect(x - 3, y - 3, 6, 6)
+    fill(x - 1, y - 1, 2, 2, FORCE)
+  elseif k == 4 then
+    fill(x - 1, y - 1, 2, 2, FORCE)
+  elseif k == 5 then
+    rect(x - 4, y - 4, 8, 8)
+    fill(x - 2, y - 2, 4, 4, FORCE)
+  else
+    fill(x - 2, y - 2, 4, 4, FORCE)
+  end
+  if e.hp < e.max and k ~= 4 then
+    local w = floor(6 * e.hp / e.max + 0.99)
+    if w < 1 then w = 1 end
+    local yb = y - 5
+    if k == 5 then yb = y - 6 end
+    line(x - 3, yb, x - 4 + w, yb, SOLID, FORCE)
+  end
+end
+
+local function infoLine(n, i, s)
+  -- box away from the cursor: bottom rows if cursor is high, else top
+  local y = TOP + (i - 1) * 8
+  if cy <= 3 then y = LCD_H - (n - i + 1) * 8 end
+  fill(0, y, LCD_W, 8, FORCE)
+  text(2, y + 1, s, SMLSIZE + INVERS)
+end
+
 local function draw()
   lcd.clear()
-  -- road
   for i = 1, #pathX - 1 do
-    lcd.drawLine(clampX(pathX[i]), pathY[i], clampX(pathX[i + 1]), pathY[i + 1], DOTTED, FORCE)
+    line(clampX(pathX[i]), pathY[i], clampX(pathX[i + 1]), pathY[i + 1], DOTTED, FORCE)
   end
-  -- towers
-  for _, t in ipairs(towers) do
-    local x, y = t.c * T + 1, TOP + t.r * T + 1
-    if t.lvl >= 3 then
-      lcd.drawFilledRectangle(x, y, 6, 6)
-      lcd.drawFilledRectangle(x + 2, y + 2, 2, 2, ERASE)
-    else
-      lcd.drawRectangle(x, y, 6, 6)
-      if t.lvl == 2 then
-        lcd.drawFilledRectangle(x + 1, y + 1, 4, 4)
-      else
-        lcd.drawFilledRectangle(x + 2, y + 2, 2, 2)
-      end
-    end
-    if t.flash > 0 then
-      local fx, fy = math.floor(t.fx), math.floor(t.fy)
-      if fx >= 0 and fx < LCD_W and fy >= TOP and fy < LCD_H then
-        lcd.drawLine(t.x, t.y, fx, fy, SOLID, FORCE)
-      end
-    end
+  for _, t in ipairs(towers) do drawTower(t) end
+  for _, e in ipairs(enemies) do drawEnemy(e) end
+  rect(cx * T, TOP + cy * T, T, T)
+
+  -- status: money, lives, wave, selected tower type + cost
+  fill(0, 0, LCD_W, 7, FORCE)
+  text(1, 0, "$" .. money, SMLSIZE + INVERS)
+  text(34, 0, "H" .. lives, SMLSIZE + INVERS)
+  local wn = wave
+  if phase == "build" then wn = wave + 1 end
+  text(56, 0, "W" .. wn, SMLSIZE + INVERS)
+  text(LCD_W - 2, 0, "<" .. tName(sel) .. "$" .. tCost(sel) .. ">", SMLSIZE + INVERS + RIGHT)
+
+  if state ~= "play" then return end
+  local l1, l2, l3 = nil, nil, nil
+  if msgT > 0 then l1 = msg elseif phase == "build" then l1 = "BUILD: ENTER=wave " .. (wave + 1) end
+  if phase == "build" then l2 = preview end
+  local t = towerAt(cx, cy)
+  if t then
+    local c = upCost(t)
+    l3 = tName(t.ty) .. t.lvl .. (c and (" SD up$" .. c) or " MAX") .. " sell" .. floor(t.spent / 2)
   end
-  -- creeps
-  for _, e in ipairs(enemies) do
-    local x, y = math.floor(e.x) - 2, math.floor(e.y) - 2
-    if x >= 0 and x + 4 <= LCD_W then
-      if e.hp * 2 > e.max then
-        lcd.drawFilledRectangle(x, y, 4, 4)
-      else
-        lcd.drawRectangle(x, y, 4, 4)
-      end
-    end
-  end
-  -- cursor
-  lcd.drawRectangle(cx * T, TOP + cy * T, T, T)
-  -- status line
-  lcd.drawFilledRectangle(0, 0, LCD_W, 7)
-  lcd.drawText(1, 0, "$" .. money, SMLSIZE + INVERS)
-  lcd.drawText(32, 0, "HP" .. lives, SMLSIZE + INVERS)
-  lcd.drawText(60, 0, "W" .. wave, SMLSIZE + INVERS)
-  local k = cell(cx, cy)
-  local hint = ""
-  if k and grid[k] == 0 then
-    hint = "+" .. COST
-  elseif k and grid[k] == 2 then
-    local t = towerAt(cx, cy)
-    local c = t and upCost(t)
-    hint = c and ("^" .. c) or "max"
-  end
-  lcd.drawText(LCD_W - 2, 0, hint, SMLSIZE + INVERS + RIGHT)
+  local n = (l1 and 1 or 0) + (l2 and 1 or 0) + (l3 and 1 or 0)
+  local i = 1
+  if l1 then infoLine(n, i, l1); i = i + 1 end
+  if l2 then infoLine(n, i, l2); i = i + 1 end
+  if l3 then infoLine(n, i, l3) end
 end
 
 local function run(event)
@@ -343,30 +505,51 @@ local function run(event)
   lastTime = now
   if dt > 0.08 then dt = 0.08 end
 
-  local press = (event == EVT_VIRTUAL_ENTER) or switchPress()
+  local sw = switchPress()
 
   if state == "title" then
-    draw()
-    lcd.drawText(14, 14, "TOWER DEFENSE", MIDSIZE + INVERS)
-    lcd.drawText(10, 32, "R stick: cursor", SMLSIZE + INVERS)
-    lcd.drawText(10, 42, "SA/SD/ENTER: build", SMLSIZE + INVERS)
-    if press then
+    lcd.clear()
+    text(14, 1, "TOWER DEFENSE", MIDSIZE)
+    text(2, 16, "R stick: cursor", SMLSIZE)
+    text(2, 24, "Wheel: tower type", SMLSIZE)
+    text(2, 32, "SA build  SD upgrade", SMLSIZE)
+    text(2, 40, "ENTER start wave", SMLSIZE)
+    text(2, 48, "hold ENTER: sell", SMLSIZE)
+    text(2, 56, "Best wave " .. best .. "   ENTER", SMLSIZE + INVERS)
+    if event == EVT_VIRTUAL_ENTER or sw then
       reset()
       state = "play"
     end
   elseif state == "play" then
     moveCursor(dt)
-    if press then build() end
+    if event == EVT_VIRTUAL_NEXT then
+      sel = sel + 1
+      if sel > 4 then sel = 1 end
+    elseif event == EVT_VIRTUAL_PREV then
+      sel = sel - 1
+      if sel < 1 then sel = 4 end
+    elseif EVT_VIRTUAL_ENTER_LONG and event == EVT_VIRTUAL_ENTER_LONG then
+      sellHere()
+      longT = 1.5   -- swallow the ENTER that may follow the long press
+      if killEvents then killEvents(event) end
+    elseif event == EVT_VIRTUAL_ENTER then
+      if longT > 0 then
+        longT = 0
+      elseif phase == "build" then
+        startWave()
+      else
+        buildHere()
+      end
+    end
+    if sw == "sa" then buildHere() elseif sw == "sd" then upgradeHere() end
     update(dt)
     draw()
-    if msgT > 0 then
-      lcd.drawText(44, 26, "WAVE " .. wave, MIDSIZE + INVERS)
-    end
   else
     draw()
-    lcd.drawText(LCD_W / 2 - 28, 14, "GAME OVER", MIDSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 36, 32, "Wave " .. wave .. "  Best " .. best, SMLSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 30, 42, "ENTER to retry", SMLSIZE + INVERS)
+    fill(10, 12, 108, 40, FORCE)
+    text(36, 15, "GAME OVER", SMLSIZE + INVERS)
+    text(16, 27, "Reached wave " .. wave .. " Best " .. best, SMLSIZE + INVERS)
+    text(32, 39, "ENTER: retry", SMLSIZE + INVERS)
     if event == EVT_VIRTUAL_ENTER then
       reset()
       state = "play"

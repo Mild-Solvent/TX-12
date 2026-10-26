@@ -1,23 +1,24 @@
 -- toolName = TNS|Battleship|TNE
 ---------------------------------------------------------------
--- Battleship vs the radio, for 128x64 B&W EdgeTX radios
---
--- Left grid: your fleet. Right grid: enemy waters.
--- Setup: ENTER or SA = start, SD = shuffle your ships
--- Aim:   flick right stick (hold to repeat) or scroll wheel
--- Fire:  SA, SD or ENTER        Exit: RTN / EXIT
--- Fleet: 5, 4, 3, 3, 2. Bars at the right = enemy ships afloat
+-- Battleship for 128x64 B&W EdgeTX radios
+-- Menu: 1 player vs AI, or 2 players hot-seat (pass the radio)
+-- Setup: SD = shuffle fleet, SA/ENTER = ready
+-- Aim:   flick right stick (hold repeats) or scroll wheel
+-- Fire:  SA or ENTER     SD: switch target / own fleet view
+-- Grid:  small square = not shot, X = miss, black = hit,
+--        big hollow square = your ship      Exit: RTN
 ---------------------------------------------------------------
 
-local N = 10
-local P = 5                 -- cell pitch in px
-local OX1, OX2, OY = 1, 62, 13
+local N, P, OX, OY, PX = 10, 6, 2, 2, 65
 local SHIPS = 5
 
--- grids per side: ship index (0 = water) and shots (0 none, 1 miss, 2 hit)
-local pShip, pShot, eShip, eShot
-local pHits, eHits = {}, {}  -- hits taken per ship
-local state, curR, curC, msg, aiT, shots, wins, losses
+-- side 1 = player 1, side 2 = player 2 or the AI
+-- ships: ship index (0 = water); shots: 0 none, 1 miss, 2 hit
+local ship1, shot1, ship2, shot2
+local hits1, hits2 = {}, {}
+local state, mode, sel, turn, view, handTo, handP
+local curR, curC, c1r, c1c, c2r, c2c, lastR, lastC
+local msgA, msgB, msgT, waitT, shots1, wins, losses, sc1, sc2
 local lastTime, armed, holdT, blinkT
 local candR, candC = {}, {}
 
@@ -33,7 +34,11 @@ local function shipName(i)
   return "Destroyer"
 end
 
--- direction 1..4 -> dr, dc (no lookup tables)
+-- no lookup tables for sides / directions (nil lookups on the radio)
+local function shipsOf(s) if s == 2 then return ship2 end return ship1 end
+local function shotsOf(s) if s == 2 then return shot2 end return shot1 end
+local function hitsOf(s) if s == 2 then return hits2 end return hits1 end
+
 local function dirVec(d)
   if d == 1 then return -1, 0 elseif d == 2 then return 1, 0
   elseif d == 3 then return 0, -1 end
@@ -61,58 +66,79 @@ local function clearGrid(g)
   end
 end
 
-local function placeRandom(g)
+local function tryPlace(g)
   clearGrid(g)
   for i = 1, SHIPS do
-    local len = shipLen(i)
-    local ok = false
-    while not ok do
-      local horiz = math.random(2) == 1
+    local len, ok, tries = shipLen(i), false, 0
+    while not ok and tries < 300 do
+      tries = tries + 1
       local dr, dc = 0, 1
-      if not horiz then dr, dc = 1, 0 end
+      if math.random(2) == 1 then dr, dc = 1, 0 end
       local r = math.random(N - dr * (len - 1))
       local c = math.random(N - dc * (len - 1))
       ok = true
       for k = 0, len - 1 do
-        if g[r + dr * k][c + dc * k] ~= 0 then ok = false end
+        if cell(g, r + dr * k, c + dc * k) ~= 0 then ok = false end
       end
       if ok then
         for k = 0, len - 1 do g[r + dr * k][c + dc * k] = i end
       end
     end
-  end
-end
-
-local function reset()
-  clearGrid(pShot)
-  clearGrid(eShot)
-  placeRandom(pShip)
-  placeRandom(eShip)
-  for i = 1, SHIPS do pHits[i], eHits[i] = 0, 0 end
-  curR, curC = 5, 5
-  shots = 0
-  msg = "SD shuffle, SA start"
-end
-
-local function init()
-  math.randomseed(getTime())
-  pShip, pShot, eShip, eShot = newGrid(), newGrid(), newGrid(), newGrid()
-  wins, losses = 0, 0
-  armed, holdT, blinkT = true, 0, 0
-  lastTime = getTime()
-  state = "title"
-  reset()
-end
-
-local function fleetSunk(hits)
-  for i = 1, SHIPS do
-    if hits[i] < shipLen(i) then return false end
+    if not ok then return false end
   end
   return true
 end
 
+local function placeRandom(g)
+  for t = 1, 20 do
+    if tryPlace(g) then return end
+  end
+  clearGrid(g)  -- fallback, never expected
+  for i = 1, SHIPS do
+    for k = 1, shipLen(i) do g[i * 2 - 1][k] = i end
+  end
+end
+
+local function setMsg(a, b)
+  msgA, msgB, msgT = a, b or "", 0
+end
+
+local function newGame()
+  clearGrid(shot1)
+  clearGrid(shot2)
+  placeRandom(ship1)
+  placeRandom(ship2)
+  for i = 1, SHIPS do hits1[i], hits2[i] = 0, 0 end
+  c1r, c1c, c2r, c2c = 5, 5, 5, 5
+  shots1, lastR, lastC = 0, nil, nil
+  turn, view, state = 1, "f", "setup"
+  setMsg("SD shuffle", "SA ready")
+end
+
+local function init()
+  math.randomseed(getTime())
+  ship1, shot1, ship2, shot2 = newGrid(), newGrid(), newGrid(), newGrid()
+  wins, losses, sc1, sc2 = 0, 0, 0, 0
+  armed, holdT, blinkT = true, 0, 0
+  mode, sel = 1, 1
+  lastTime = getTime()
+  state = "menu"
+  newGame()
+  state = "menu"
+end
+
+local function sunkCount(hits)
+  local n = 0
+  for i = 1, SHIPS do
+    if hits[i] >= shipLen(i) then n = n + 1 end
+  end
+  return n
+end
+
 -- fire at (r, c) on a side; returns "miss", "hit" or "sunk", ship index
-local function fire(ships, shotsG, hits, r, c)
+local function fire(side, r, c)
+  local ships, shotsG, hits = shipsOf(side), shotsOf(side), hitsOf(side)
+  lastR, lastC = r, c
   local s = cell(ships, r, c)
   if s > 0 then
     shotsG[r][c] = 2
@@ -124,25 +150,52 @@ local function fire(ships, shotsG, hits, r, c)
   return "miss", 0
 end
 
+local function report(who, res, s)
+  if res == "miss" then
+    setMsg(who .. " missed")
+    playTone(600, 40, 0, PLAY_NOW)
+  elseif res == "hit" then
+    setMsg(who .. " HIT", shipName(s))
+    playTone(2000, 80, 0, PLAY_NOW)
+  else
+    setMsg(who .. " sank", shipName(s))
+    playTone(2500, 200, 0, PLAY_NOW)
+  end
+end
+
+local function gameOver(w)
+  state, view = "over", "t"
+  if mode == 1 then
+    if w == 1 then
+      wins = wins + 1
+      setMsg("WON in " .. shots1, "ENTER=menu")
+    else
+      losses = losses + 1
+      view = "f"
+      setMsg("YOU LOST", "ENTER=menu")
+    end
+  else
+    turn = w
+    if w == 1 then sc1 = sc1 + 1 else sc2 = sc2 + 1 end
+    setMsg("P" .. w .. " WINS!", "ENTER=menu")
+  end
+end
+
 -- AI: hit cells of ships still afloat
 local function openHit(r, c)
-  if cell(pShot, r, c) ~= 2 then return false end
-  local s = pShip[r][c]
-  return pHits[s] < shipLen(s)
+  if cell(shot1, r, c) ~= 2 then return false end
+  local s = ship1[r][c]
+  return hits1[s] < shipLen(s)
 end
 
 local function addCand(r, c)
-  if cell(pShot, r, c) == 0 then
+  if cell(shot1, r, c) == 0 then
     candR[#candR + 1], candC[#candC + 1] = r, c
   end
 end
 
-local function clearCand()
-  for i = #candR, 1, -1 do candR[i], candC[i] = nil, nil end
-end
-
 local function aiPick()
-  clearCand()
+  for i = #candR, 1, -1 do candR[i], candC[i] = nil, nil end
   -- 1. extend a line of two or more open hits
   for r = 1, N do
     for c = 1, N do
@@ -151,7 +204,7 @@ local function aiPick()
           local dr, dc = dirVec(d)
           if openHit(r + dr, c + dc) then
             local k = 2
-            while openHit(r + dr * k, c + dc * k) do k = k + 1 end
+            while k <= N and openHit(r + dr * k, c + dc * k) do k = k + 1 end
             addCand(r + dr * k, c + dc * k)
             addCand(r - dr, c - dc)
           end
@@ -173,18 +226,16 @@ local function aiPick()
     end
   end
   -- 3. hunt on a checkerboard, then anywhere
-  if #candR == 0 then
-    for r = 1, N do
-      for c = 1, N do
-        if (r + c) % 2 == 0 then addCand(r, c) end
+  for pass = 1, 2 do
+    if #candR == 0 then
+      for r = 1, N do
+        for c = 1, N do
+          if pass == 2 or (r + c) % 2 == 0 then addCand(r, c) end
+        end
       end
     end
   end
-  if #candR == 0 then
-    for r = 1, N do
-      for c = 1, N do addCand(r, c) end
-    end
-  end
+  if #candR == 0 then return nil end
   local i = math.random(#candR)
   return candR[i], candC[i]
 end
@@ -192,48 +243,42 @@ end
 local function aiTurn()
   local r, c = aiPick()
   if r == nil then return end
-  local res, s = fire(pShip, pShot, pHits, r, c)
-  if res == "miss" then
-    msg = "AI missed. Your turn"
-    playTone(500, 40, 0, PLAY_NOW)
-  elseif res == "hit" then
-    msg = "AI hit " .. shipName(s)
-    playTone(300, 120, 0, PLAY_NOW)
+  local res, s = fire(1, r, c)
+  report("AI", res, s)
+  if sunkCount(hits1) == SHIPS then
+    gameOver(2)
   else
-    msg = "AI sank " .. shipName(s)
-    playTone(200, 300, 0, PLAY_NOW)
+    state, waitT = "aires", 1.4
   end
-  if fleetSunk(pHits) then
-    state = "over"
-    losses = losses + 1
-    msg = "YOU LOST  ENTER=new"
+end
+
+local function startTurn(p)
+  turn, view = p, "t"
+  if p == 1 then curR, curC = c1r, c1c else curR, curC = c2r, c2c end
+  if mode == 2 and lastR then
+    state, view, waitT = "peek", "f", 2  -- show where the foe shot
+  else
+    state = "play"
+    if mode == 2 then setMsg("P" .. p .. " turn", "fire!") end
   end
 end
 
 local function playerFire()
-  if cell(eShot, curR, curC) ~= 0 then
+  local tgt = 3 - turn
+  if cell(shotsOf(tgt), curR, curC) ~= 0 then
     playTone(150, 40, 0, PLAY_NOW)
     return
   end
-  shots = shots + 1
-  local res, s = fire(eShip, eShot, eHits, curR, curC)
-  if res == "miss" then
-    msg = "You: miss"
-    playTone(800, 40, 0, PLAY_NOW)
-  elseif res == "hit" then
-    msg = "You: HIT!"
-    playTone(2000, 80, 0, PLAY_NOW)
+  if turn == 1 then shots1 = shots1 + 1 end
+  local res, s = fire(tgt, curR, curC)
+  local who = "You"
+  if mode == 2 then who = "P" .. turn end
+  report(who, res, s)
+  if turn == 1 then c1r, c1c = curR, curC else c2r, c2c = curR, curC end
+  if sunkCount(hitsOf(tgt)) == SHIPS then
+    gameOver(turn)
   else
-    msg = "You sank " .. shipName(s) .. "!"
-    playTone(2500, 200, 0, PLAY_NOW)
-  end
-  if fleetSunk(eHits) then
-    state = "over"
-    wins = wins + 1
-    msg = "WON in " .. shots .. "! ENTER=new"
-  else
-    state = "ai"
-    aiT = 0.8
+    state, waitT = "result", 1.2
   end
 end
 
@@ -295,58 +340,111 @@ local function moveCursor(dr, dc)
   if curR < 1 then curR = N end
 end
 
-local function drawGrid(ox, ships, shotsG, own)
-  lcd.drawRectangle(ox - 1, OY - 1, N * P + 1, N * P + 1)
+-- one 10x10 board, 6 px cells (5 px mark + 1 px gap)
+local function drawBoard(side, fleet, reveal)
+  lcd.drawRectangle(OX - 1, OY - 1, N * P + 1, N * P + 1)
+  local sg, gs = shipsOf(side), shotsOf(side)
   for r = 1, N do
+    local y = OY + (r - 1) * P
     for c = 1, N do
-      local x = ox + (c - 1) * P
-      local y = OY + (r - 1) * P
-      local s, sh = ships[r][c], shotsG[r][c]
+      local x = OX + (c - 1) * P
+      local sh = gs[r][c] or 0
       if sh == 2 then
-        if own then
-          lcd.drawRectangle(x, y, 4, 4)
-        else
-          lcd.drawFilledRectangle(x, y, 4, 4)
-        end
+        lcd.drawFilledRectangle(x, y, 5, 5, FORCE)
       elseif sh == 1 then
-        lcd.drawPoint(x + 1, y + 1)
+        lcd.drawLine(x, y, x + 4, y + 4, SOLID, FORCE)
+        lcd.drawLine(x + 4, y, x, y + 4, SOLID, FORCE)
+      elseif (sg[r][c] or 0) > 0 and (fleet or reveal) then
+        lcd.drawRectangle(x, y, 5, 5)
+      elseif fleet then
         lcd.drawPoint(x + 2, y + 2)
-      elseif s > 0 and (own or state == "over") then
-        if own then
-          lcd.drawFilledRectangle(x, y, 4, 4)
-        else
-          lcd.drawRectangle(x, y, 4, 4)
-        end
+      else
+        lcd.drawRectangle(x + 1, y + 1, 3, 3)
       end
-      if r < N and c < N then lcd.drawPoint(x + 4, y + 4) end
     end
+  end
+end
+
+local function frame(r, c)
+  if r and c and (blinkT % 0.5) < 0.35 then
+    lcd.drawRectangle(OX + (c - 1) * P - 1, OY + (r - 1) * P - 1, 7, 7)
+  end
+end
+
+local function pad(s)
+  if #s < 10 then return s .. string.rep(" ", 10 - #s) end
+  return s
+end
+
+-- ships afloat as bars (sunk = flat line), with a label
+local function fleetLine(y, label, hits)
+  lcd.drawText(PX, y, label .. " " .. (SHIPS - sunkCount(hits)) .. "/5", SMLSIZE)
+  local x = PX
+  for i = 1, SHIPS do
+    local w = shipLen(i) * 3
+    if hits[i] < shipLen(i) then
+      lcd.drawFilledRectangle(x, y + 8, w, 3, FORCE)
+    else
+      lcd.drawLine(x, y + 10, x + w - 1, y + 10, SOLID, FORCE)
+    end
+    x = x + w + 2
   end
 end
 
 local function draw()
   lcd.clear()
-  drawGrid(OX1, pShip, pShot, true)
-  if state == "setup" then
-    lcd.drawText(OX2, OY + 2, "Your fleet", SMLSIZE)
-    lcd.drawText(OX2, OY + 14, "SD: shuffle", SMLSIZE)
-    lcd.drawText(OX2, OY + 24, "SA/ENTER:", SMLSIZE)
-    lcd.drawText(OX2, OY + 33, "  battle!", SMLSIZE)
-    lcd.drawText(OX2, OY + 44, "W" .. wins .. " L" .. losses, SMLSIZE)
-  else
-    drawGrid(OX2, eShip, eShot, false)
-    if state == "play" and (blinkT % 0.6) < 0.45 then
-      lcd.drawRectangle(OX2 + (curC - 1) * P - 1, OY + (curR - 1) * P - 1, 6, 6)
-    end
-    -- enemy ships still afloat, as bars
-    local y = OY + 1
-    for i = 1, SHIPS do
-      if eHits[i] < shipLen(i) then
-        lcd.drawFilledRectangle(LCD_W - 1 - shipLen(i) * 2, y, shipLen(i) * 2, 2)
-      end
-      y = y + 4
-    end
+  local side, fleet = 3 - turn, view == "f"
+  if fleet then side = turn end
+  drawBoard(side, fleet, state == "over")
+  if state == "play" and not fleet then frame(curR, curC)
+  elseif state == "result" or state == "aires" or state == "peek" then
+    frame(lastR, lastC)
   end
-  lcd.drawText(1, 2, msg, SMLSIZE + ((state == "over") and INVERS or 0))
+  -- right panel: view name, message bar, fleets, hint
+  local t = "MY FLEET"
+  if not fleet then t = "TARGET" end
+  if mode == 2 then
+    t = "P" .. turn .. " FLEET"
+    if not fleet then t = "P" .. turn .. " TARGET" end
+  end
+  lcd.drawText(PX, 0, t, SMLSIZE)
+  local f = INVERS
+  if msgT < 0.9 and (msgT % 0.3) >= 0.15 then f = 0 end
+  lcd.drawText(PX, 9, pad(msgA), SMLSIZE + f)
+  lcd.drawText(PX, 18, pad(msgB), SMLSIZE + f)
+  if state == "setup" then
+    if mode == 1 then t = "W" .. wins .. " L" .. losses
+    else t = "Score " .. sc1 .. ":" .. sc2 end
+    lcd.drawText(PX, 30, t, SMLSIZE)
+    return
+  end
+  fleetLine(29, "Enemy", hitsOf(3 - turn))
+  fleetLine(42, "Yours", hitsOf(turn))
+  if state == "play" or state == "over" then
+    t = "SD:fleet"
+    if fleet then t = "SD:target" end
+    lcd.drawText(PX, 56, t, SMLSIZE)
+  end
+end
+
+local function drawMenu()
+  lcd.clear()
+  lcd.drawText(LCD_W / 2 - 38, 1, "BATTLESHIP", MIDSIZE + INVERS)
+  lcd.drawText(20, 17, " 1 PLAYER vs AI ", SMLSIZE + ((sel == 1) and INVERS or 0))
+  lcd.drawText(20, 27, " 2 PLAYERS      ", SMLSIZE + ((sel == 2) and INVERS or 0))
+  lcd.drawText(2, 39, "Aim: stick or wheel", SMLSIZE)
+  lcd.drawText(2, 47, "Fire: SA or ENTER", SMLSIZE)
+  lcd.drawText(2, 55, "SD: see your fleet", SMLSIZE)
+end
+
+local function drawHand()
+  lcd.clear()
+  lcd.drawText(LCD_W / 2 - 30, 4, "PLAYER " .. handP, MIDSIZE + INVERS)
+  local t = "your turn"
+  if handTo == "setup" then t = "place your fleet" end
+  lcd.drawText(10, 24, t, SMLSIZE)
+  lcd.drawText(10, 34, "Pass the radio,", SMLSIZE)
+  lcd.drawText(10, 44, "then press ENTER", SMLSIZE + BLINK)
 end
 
 local function run(event)
@@ -359,49 +457,94 @@ local function run(event)
   lastTime = now
   if dt > 0.08 then dt = 0.08 end
   blinkT = blinkT + dt
+  msgT = msgT + dt
 
   local sw = switchPress()
+  local ok = event == EVT_VIRTUAL_ENTER or sw == "sa"
 
-  if state == "title" then
-    lcd.clear()
-    lcd.drawText(LCD_W / 2 - 38, 4, "BATTLESHIP", MIDSIZE + INVERS)
-    lcd.drawText(2, 24, "Stick/wheel: aim", SMLSIZE)
-    lcd.drawText(2, 33, "SA/SD/ENTER: fire", SMLSIZE)
-    lcd.drawText(2, 42, "Sink all 5 AI ships", SMLSIZE)
-    lcd.drawText(2, 54, "ENTER to start", SMLSIZE + BLINK)
-    if event == EVT_VIRTUAL_ENTER or sw then
-      reset()
-      state = "setup"
+  if state == "menu" then
+    local dr = readStick(dt)
+    if dr ~= 0 or event == EVT_VIRTUAL_NEXT or event == EVT_VIRTUAL_PREV then
+      sel = 3 - sel
+    end
+    if ok or sw then
+      mode = sel
+      newGame()
+      draw()
+    else
+      drawMenu()
     end
     return 0
-  end
-
-  if state == "setup" then
+  elseif state == "hand" then
+    if ok or sw then
+      if handTo == "setup" then
+        turn, view, state = handP, "f", "setup"
+        setMsg("SD shuffle", "SA ready")
+      else
+        startTurn(handP)
+      end
+      draw()
+    else
+      drawHand()
+    end
+    return 0
+  elseif state == "setup" then
     if sw == "sd" then
-      placeRandom(pShip)
+      placeRandom(shipsOf(turn))
       playTone(1000, 20, 0, PLAY_NOW)
-    elseif sw == "sa" or event == EVT_VIRTUAL_ENTER then
-      state = "play"
-      msg = "Your turn: fire!"
+    elseif ok then
+      if mode == 1 then
+        startTurn(1)
+        setMsg("Your turn", "fire!")
+      else
+        state, handTo, handP = "hand", "setup", 2
+        if turn == 2 then handTo, handP = "turn", 1 end
+      end
     end
   elseif state == "play" then
     local dr, dc = readStick(dt)
-    if dr ~= 0 or dc ~= 0 then moveCursor(dr, dc); blinkT = 0 end
-    if event == EVT_VIRTUAL_NEXT then moveCursor(0, 1); blinkT = 0 end
-    if event == EVT_VIRTUAL_PREV then moveCursor(0, -1); blinkT = 0 end
-    if sw or event == EVT_VIRTUAL_ENTER then playerFire() end
-  elseif state == "ai" then
-    aiT = aiT - dt
-    if aiT <= 0 then
-      aiTurn()
-      if state == "ai" then state = "play" end
+    if event == EVT_VIRTUAL_NEXT then dc = 1 end
+    if event == EVT_VIRTUAL_PREV then dc = -1 end
+    if dr ~= 0 or dc ~= 0 then
+      moveCursor(dr, dc)
+      blinkT = 0
+      view = "t"
     end
-  elseif event == EVT_VIRTUAL_ENTER then
-    reset()
-    state = "setup"
+    if sw == "sd" then
+      if view == "t" then view = "f" else view = "t" end
+    elseif ok then
+      if view == "f" then view = "t" else playerFire() end
+    end
+  elseif state == "result" then
+    waitT = waitT - dt
+    if waitT <= 0 or ok then
+      if mode == 1 then
+        state, waitT, view = "ai", 0.7, "f"
+        setMsg("AI aims..")
+      else
+        state, handTo, handP = "hand", "turn", 3 - turn
+      end
+    end
+  elseif state == "ai" then
+    waitT = waitT - dt
+    if waitT <= 0 then aiTurn() end
+  elseif state == "aires" or state == "peek" then
+    waitT = waitT - dt
+    if waitT <= 0 or ok then
+      state, view = "play", "t"
+      if mode == 2 then setMsg("P" .. turn .. " turn", "fire!") end
+    end
+  elseif state == "over" then
+    if sw == "sd" then
+      if view == "t" then view = "f" else view = "t" end
+    elseif ok then
+      state = "menu"
+    end
   end
 
-  draw()
+  if state == "hand" then drawHand()
+  elseif state == "menu" then drawMenu()
+  else draw() end
   return 0
 end
 

@@ -1,12 +1,12 @@
 -- toolName = TNS|Artillery|TNE
 ---------------------------------------------------------------
 -- Artillery (Scorched Earth) for 128x64 B&W EdgeTX radios
---
+-- Menu:  1 player vs AI, or 2 players hot-seat (take turns,
+--        P1 = left tank, P2 = right tank, first to 3 rounds)
 -- Aim:   right stick left/right = angle, up/down = power
 --        (left stick left/right also turns, wheel = power +-1)
 -- Fire:  SA or SD, or ENTER (wheel press)
 -- Wind:  arrow at the top. Craters change the ground.
--- Beat the enemy tank to win a round; you heal a bit after.
 -- Exit:  RTN / EXIT
 ---------------------------------------------------------------
 
@@ -20,6 +20,8 @@ local state, ground, trailX, trailY, trailN, lastTX, lastTY
 local px, ex, pHP, eHP, pAng, pPow
 local eAng, ePow, eLo, eHi, eShots
 local wind, round, best, lastTime
+local mode, sel, turn, sc1, sc2, armed  -- 2 player hot-seat
+local WINS = 3
 local sx, sy, svx, svy, flyT, shooter, boomX, boomY, boomT, waitT
 
 -- terrain height (y of the surface) at screen column x, always valid
@@ -88,6 +90,15 @@ local function newRound()
   eHP = 100
   pHP = math.min(100, pHP + 30)
   wind = math.random(-12, 12)
+  trailN = 0
+  state = "aim"
+  if mode == 2 then
+    pHP = 100
+    turn = 1 + round % 2   -- starting player alternates
+    waitT = 0
+    return
+  end
+  turn = 1
   eAng = math.random(45, 62)
   local d = ex - px
   local ideal = math.sqrt(d * GRAV / math.sin(2 * eAng * math.pi / 180)) / VSCALE
@@ -95,14 +106,12 @@ local function newRound()
   if math.random(2) == 1 then miss = -miss end
   ePow = ideal * (1 + miss / 100)
   eLo, eHi, eShots = nil, nil, 0
-  trailN = 0
-  state = "aim"
 end
 
 local function newGame()
-  round = 0
+  round, sc1, sc2 = 0, 0, 0
   pHP = 100
-  pAng, pPow = 45, 60
+  pAng, pPow, eAng, ePow = 45, 60, 45, 60
   newRound()
 end
 
@@ -110,7 +119,7 @@ local function init()
   math.randomseed(getTime())
   ground, trailX, trailY = {}, {}, {}
   for i = 1, MAXTRAIL do trailX[i], trailY[i] = 0, 0 end
-  best = 0
+  best, mode, sel, armed = 0, 1, 1, true
   lastTime = getTime()
   newGame()
   state = "title"
@@ -203,7 +212,7 @@ local function explode(x, y)
       if g ~= nil and g < bottom then ground[cx + 1] = bottom end
     end
   end
-  if shooter == 2 then aiLearn(x) end
+  if shooter == 2 and mode == 1 then aiLearn(x) end
   state = "boom"
   playTone(150, 250, 0, PLAY_NOW)
 end
@@ -225,7 +234,7 @@ local function flyStep(dt)
     sy = sy + svy * h
     if sx < -2 or sx > LCD_W + 1 or sy > LCD_H or flyT > 12 then
       boomX, boomT, state = nil, 0, "boom"
-      if shooter == 2 then aiLearn(nil) end
+      if shooter == 2 and mode == 1 then aiLearn(nil) end
       return
     end
     if hitTank(px, sx, sy) or hitTank(ex, sx, sy) or sy >= gnd(sx) then
@@ -291,33 +300,62 @@ local function draw()
     circle(boomX, boomY, r)
   end
   -- HUD: angle/power, wind arrow, round
-  lcd.drawText(0, 0, "A" .. math.floor(pAng) .. " P" .. math.floor(pPow), SMLSIZE)
-  lcd.drawText(50, 0, "W", SMLSIZE)
+  local a, p = pAng, pPow
+  if turn == 2 then a, p = eAng, ePow end
+  local x = 0
+  if mode == 2 then
+    lcd.drawText(0, 0, "P" .. turn, SMLSIZE + INVERS)
+    x = 13
+  end
+  lcd.drawText(x, 0, "A" .. math.floor(a) .. " P" .. math.floor(p), SMLSIZE)
+  lcd.drawText(66, 0, "W", SMLSIZE)
   local s = 1
   if wind < 0 then s = -1 end
   local l = math.floor(math.abs(wind)) + 2
-  local a = math.floor(72 - s * l / 2)
+  a = math.floor(86 - s * l / 2)
   local b = a + s * l
   lcd.drawLine(a, 3, b, 3, SOLID, FORCE)
   lcd.drawLine(b, 3, b - s * 2, 1, SOLID, FORCE)
   lcd.drawLine(b, 3, b - s * 2, 5, SOLID, FORCE)
-  lcd.drawText(LCD_W - 1, 0, "R" .. (round + 1), SMLSIZE + RIGHT)
+  if mode == 2 then
+    lcd.drawText(LCD_W - 1, 0, sc1 .. ":" .. sc2, SMLSIZE + RIGHT)
+  else
+    lcd.drawText(LCD_W - 1, 0, "R" .. (round + 1), SMLSIZE + RIGHT)
+  end
 end
 
 local function aim(dt, event)
-  local turn = getValue("ail")
+  local pAng, pPow = pAng, pPow
+  if turn == 2 then pAng, pPow = eAng, ePow end
+  local tv = getValue("ail")
   local rud = getValue("rud")
-  if math.abs(rud) > math.abs(turn) then turn = rud end
+  if math.abs(rud) > math.abs(tv) then tv = rud end
   local pw = getValue("ele")
-  if math.abs(turn) > 300 then pAng = pAng + turn / 1024 * 45 * dt end
+  if math.abs(tv) > 300 then pAng = pAng + tv / 1024 * 45 * dt end
   if math.abs(pw) > 300 then pPow = pPow + pw / 1024 * 40 * dt end
   if event == EVT_VIRTUAL_NEXT then pPow = pPow + 1 end
   if event == EVT_VIRTUAL_PREV then pPow = pPow - 1 end
   if pAng < 5 then pAng = 5 elseif pAng > 85 then pAng = 85 end
   if pPow < 10 then pPow = 10 elseif pPow > 100 then pPow = 100 end
+  return pAng, pPow
 end
 
 local function afterBoom()
+  if mode == 2 then
+    waitT = 0
+    if pHP <= 0 or eHP <= 0 then
+      round = round + 1
+      if eHP <= 0 and pHP > 0 then sc1 = sc1 + 1 end
+      if pHP <= 0 and eHP > 0 then sc2 = sc2 + 1 end
+      state = "won"
+      if sc1 >= WINS or sc2 >= WINS then state = "over" end
+      playTone(2500, 200, 0, PLAY_NOW)
+    else
+      turn = 3 - shooter
+      state = "aim"
+    end
+    return
+  end
   if pHP <= 0 then
     if round > best then best = round end
     state = "over"
@@ -348,17 +386,37 @@ local function run(event)
   local press = (event == EVT_VIRTUAL_ENTER) or switchPress()
 
   if state == "title" then
-    draw()
-    lcd.drawText(LCD_W / 2 - 34, 12, "ARTILLERY", MIDSIZE + INVERS)
-    lcd.drawText(4, 28, "Stick: angle / power", SMLSIZE)
-    lcd.drawText(4, 37, "SA/SD/ENTER: fire", SMLSIZE)
+    local v = getValue("ele")
+    if math.abs(v) < 300 then armed = true end
+    if event == EVT_VIRTUAL_NEXT or event == EVT_VIRTUAL_PREV
+      or (armed and math.abs(v) > 600) then
+      sel = 3 - sel
+      armed = false
+    end
+    lcd.clear()
+    lcd.drawText(LCD_W / 2 - 34, 4, "ARTILLERY", MIDSIZE + INVERS)
+    lcd.drawText(28, 21, " 1 PLAYER vs AI ", SMLSIZE + ((sel == 1) and INVERS or 0))
+    lcd.drawText(28, 30, " 2 PLAYERS      ", SMLSIZE + ((sel == 2) and INVERS or 0))
+    lcd.drawText(4, 44, "Stick: angle/power", SMLSIZE)
+    lcd.drawText(4, 53, "SA/SD/ENTER: fire", SMLSIZE)
     if press then
+      mode = sel
       newGame()
     end
   elseif state == "aim" then
-    aim(dt, event)
+    waitT = (waitT or 0) + dt
+    if turn == 2 then
+      eAng, ePow = aim(dt, event)
+    else
+      pAng, pPow = aim(dt, event)
+    end
     draw()
-    if press then fire(1, pAng, pPow) end
+    if mode == 2 and waitT < 1.2 then
+      lcd.drawText(LCD_W / 2 - 31, 9, " PLAYER " .. turn .. " TURN ", SMLSIZE + INVERS)
+    end
+    if press then
+      if turn == 2 then fire(2, eAng, ePow) else fire(1, pAng, pPow) end
+    end
   elseif state == "fly" then
     flyStep(dt)
     draw()
@@ -377,15 +435,30 @@ local function run(event)
   elseif state == "won" then
     waitT = waitT + dt
     draw()
-    lcd.drawText(LCD_W / 2 - 30, 14, "ROUND WON", MIDSIZE + INVERS)
-    if waitT > 2 or (waitT > 0.5 and press) then newRound() end
+    if mode == 2 then
+      local t = "DRAW"
+      if eHP <= 0 and pHP > 0 then t = "P1 WINS" end
+      if pHP <= 0 and eHP > 0 then t = "P2 WINS" end
+      lcd.drawText(LCD_W / 2 - 34, 12, t .. " ROUND", SMLSIZE + INVERS)
+      lcd.drawText(LCD_W / 2 - 16, 22, sc1 .. " : " .. sc2, MIDSIZE + INVERS)
+    else
+      lcd.drawText(LCD_W / 2 - 30, 14, "ROUND WON", MIDSIZE + INVERS)
+    end
+    if waitT > 2.5 or (waitT > 0.5 and press) then newRound() end
   else
     draw()
-    lcd.drawText(LCD_W / 2 - 28, 8, "GAME OVER", MIDSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 40, 26, "Rounds " .. round .. "  Best " .. best, SMLSIZE)
-    lcd.drawText(LCD_W / 2 - 30, 36, "ENTER to retry", SMLSIZE)
+    if mode == 2 then
+      local w = 1
+      if sc2 > sc1 then w = 2 end
+      lcd.drawText(LCD_W / 2 - 34, 8, "P" .. w .. " WINS!", MIDSIZE + INVERS)
+      lcd.drawText(LCD_W / 2 - 36, 26, "Match " .. sc1 .. " : " .. sc2, SMLSIZE + INVERS)
+    else
+      lcd.drawText(LCD_W / 2 - 28, 8, "GAME OVER", MIDSIZE + INVERS)
+      lcd.drawText(LCD_W / 2 - 40, 26, "Rounds " .. round .. "  Best " .. best, SMLSIZE)
+    end
+    lcd.drawText(LCD_W / 2 - 30, 36, "ENTER: menu", SMLSIZE)
     if event == EVT_VIRTUAL_ENTER then
-      newGame()
+      state = "title"
     end
   end
   return 0

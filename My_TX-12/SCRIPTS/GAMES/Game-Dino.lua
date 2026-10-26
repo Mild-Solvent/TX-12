@@ -17,6 +17,7 @@ local SPEED0 = 55       -- px/s
 local ACCEL = 1.4       -- px/s gained per second
 local MAX_SPEED = 135
 local BIRD_DIST = 2400  -- px run before birds appear
+local MAX_OBS = 6       -- hard cap on obstacles alive at once
 
 -- EdgeTX on B&W radios has no table library
 local function removeAt(t, i)
@@ -82,6 +83,7 @@ local function stickJump()
 end
 
 local function spawn()
+  if #obs >= MAX_OBS then return end
   local o
   if dist > BIRD_DIST and math.random() < 0.3 then
     -- bird: top is its height above ground of its upper edge
@@ -153,42 +155,52 @@ local function update(dt, jump)
   end
 end
 
+-- Every pixel goes through rect(): integer, clipped to the screen, solid
+-- (FORCE). Off-screen coordinates (obstacles sliding out at the left,
+-- pebbles at x < 0) were passed straight to the firmware before; the B&W
+-- LCD code does not clip negative x, so it wrote outside the line / frame
+-- buffer, the likely cause of the crash and radio reset.
+local function rect(x, y, w, h)
+  x, y = math.floor(x), math.floor(y)
+  if x < 0 then w = w + x x = 0 end
+  if y < 0 then h = h + y y = 0 end
+  if x + w > LCD_W then w = LCD_W - x end
+  if y + h > LCD_H then h = LCD_H - y end
+  if w > 0 and h > 0 then lcd.drawFilledRectangle(x, y, w, h, FORCE) end
+end
+
 local function drawDino()
   local y = math.floor(GROUND - dinoY - DH)
-  lcd.drawFilledRectangle(DX + 3, y, 5, 3)          -- head
-  lcd.drawFilledRectangle(DX + 1, y + 3, 5, 4)      -- body
-  lcd.drawPoint(DX, y + 4)                          -- tail
-  lcd.drawPoint(DX + 6, y + 4)                      -- arm
-  if dinoY > 0 or math.floor(legT * 10) % 2 == 0 then
-    lcd.drawLine(DX + 2, y + 7, DX + 2, y + 9, SOLID, FORCE)
-    lcd.drawLine(DX + 4, y + 7, DX + 4, y + 8, SOLID, FORCE)
-  else
-    lcd.drawLine(DX + 2, y + 7, DX + 2, y + 8, SOLID, FORCE)
-    lcd.drawLine(DX + 4, y + 7, DX + 4, y + 9, SOLID, FORCE)
-  end
+  rect(DX + 3, y, 5, 3)          -- head
+  rect(DX + 1, y + 3, 5, 4)      -- body
+  rect(DX, y + 4, 1, 1)          -- tail
+  rect(DX + 6, y + 4, 1, 1)      -- arm
+  local a, b = 3, 2
+  if dinoY <= 0 and math.floor(legT * 10) % 2 == 1 then a, b = 2, 3 end
+  rect(DX + 2, y + 7, 1, a)
+  rect(DX + 4, y + 7, 1, b)
 end
 
 local function drawObs(o)
   local x = math.floor(o.x)
   if o.bird then
     local y = GROUND - o.top
-    lcd.drawFilledRectangle(x + 2, y + 2, 6, 2)
-    lcd.drawPoint(x, y + 2)
-    lcd.drawPoint(x + 1, y + 2)
+    rect(x, y + 2, 8, 2)
     if math.floor(legT * 6) % 2 == 0 then
-      lcd.drawLine(x + 4, y, x + 5, y + 1, SOLID, FORCE)
+      rect(x + 4, y, 1, 2)
     else
-      lcd.drawLine(x + 4, y + 4, x + 5, y + 3, SOLID, FORCE)
+      rect(x + 4, y + 4, 1, 1)
+      rect(x + 5, y + 3, 1, 1)
     end
   else
     local n = math.floor((o.w + 1) / 4)
+    if n > 3 then n = 3 end
     for k = 0, n - 1 do
-      local cx = x + k * 4
-      lcd.drawFilledRectangle(cx, GROUND - o.h, 3, o.h)
+      rect(x + k * 4, GROUND - o.h, 3, o.h)
     end
     if o.h > 8 then
-      lcd.drawPoint(x - 1, GROUND - o.h + 3)
-      lcd.drawPoint(x + o.w, GROUND - o.h + 4)
+      rect(x - 1, GROUND - o.h + 3, 1, 1)
+      rect(x + o.w, GROUND - o.h + 4, 1, 1)
     end
   end
 end
@@ -199,8 +211,8 @@ local function draw()
   -- pebbles scroll with the ground
   local off = math.floor(dist) % 32
   for i = 0, 4 do
-    lcd.drawPoint(i * 32 + 7 - off, GROUND + 2)
-    lcd.drawPoint(i * 32 + 22 - off, GROUND + 4)
+    rect(i * 32 + 7 - off, GROUND + 2, 1, 1)
+    rect(i * 32 + 22 - off, GROUND + 4, 1, 1)
   end
   for _, o in ipairs(obs) do drawObs(o) end
   drawDino()

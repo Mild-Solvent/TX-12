@@ -2,14 +2,19 @@
 ---------------------------------------------------------------
 -- Video Poker, Jacks or Better, for 128x64 B&W EdgeTX radios
 --
--- Bet 1-5: wheel or right stick, ENTER / SD deals
+-- Menu:    Play / Rules (wheel or stick, ENTER)
+-- Bet 1-5: wheel or right stick, ENTER / SD deals, SA rules
 -- Cards:   wheel or stick left/right picks a card,
 --          SA (or stick up) holds it, SD / ENTER draws
--- Exit:    RTN / EXIT
+-- Exit:    RTN / EXIT (RTN in the rules closes them)
+-- Rules text + viewer: /SCRIPTS/GAMES/POKER/rules.lua, loaded
+-- on demand; shown by itself the first time (poker.dat)
 ---------------------------------------------------------------
 
 local CW, CH, CY = 22, 27, 9
 local START_CREDITS = 100
+local RULES = "/SCRIPTS/GAMES/POKER/rules.lua"
+local SEEN = "/SCRIPTS/GAMES/poker.dat"
 local RANKS = "A23456789TJQK"
 -- 5x5 suit glyphs: hearts, diamonds, clubs, spades (25 chars each)
 local GLYPHS = ".X.X." .. "XXXXX" .. "XXXXX" .. ".XXX." .. "..X.." ..
@@ -17,8 +22,9 @@ local GLYPHS = ".X.X." .. "XXXXX" .. "XXXXX" .. ".XXX." .. "..X.." ..
                ".XXX." .. ".XXX." .. "XXXXX" .. "XX.XX" .. "..X.." ..
                "..X.." .. ".XXX." .. "XXXXX" .. "..X.." .. ".XXX."
 
-local deck, pos, hand, held, cnt, vals
+local deck, pos, hand, held, cnt, vals, lastTime
 local state, credits, bet, cursor, result, win, armed
+local menu, rules, rback, seen
 
 local function shuffle()
   for i = 1, 52 do deck[i] = i - 1 end
@@ -148,6 +154,46 @@ local function init()
   result, win = -1, 0
   state = "title"
   armed = true
+  menu = 1
+  seen = false
+  pcall(function()
+    local f = io.open(SEEN, "r")
+    if f then
+      seen = (io.read(f, 4) or "") ~= ""
+      io.close(f)
+    end
+  end)
+end
+
+-- rules.lua returns a viewer function(event, dt) -> true when done
+local function openRules()
+  local ok, chunk = pcall(loadScript, RULES)
+  local f = nil
+  if ok and chunk then ok, f = pcall(chunk) end
+  if type(f) ~= "function" then
+    f = function(e)
+      lcd.drawText(0, 0, "Missing " .. RULES, SMLSIZE)
+      return e == EVT_VIRTUAL_ENTER
+    end
+  end
+  rules, rback = f, state
+  state = "rules"
+end
+
+local function closeRules()
+  rules = nil
+  collectgarbage()
+  state = rback or "title"
+  if not seen then
+    seen = true
+    pcall(function()
+      local f = io.open(SEEN, "w")
+      if f then
+        io.write(f, "1")
+        io.close(f)
+      end
+    end)
+  end
 end
 
 -- "sa" / "sd" once per press, else nil. Works for buttons and toggles:
@@ -262,18 +308,28 @@ local function drawPaytable()
     local col = math.floor(idx / 5)
     local row = idx % 5
     local x = 2 + col * 64
-    local y = 9 + row * 8
+    local y = 9 + row * 7
     lcd.drawText(x, y, shortName(k), SMLSIZE)
     lcd.drawText(x + 60, y, tostring(payout(k, bet)), SMLSIZE + RIGHT)
   end
-  lcd.drawLine(0, 49, LCD_W - 1, 49, SOLID, FORCE)
-  lcd.drawText(1, 52, "+/- bet  ENTER deal", SMLSIZE)
+  lcd.drawLine(0, 45, LCD_W - 1, 45, SOLID, FORCE)
+  lcd.drawText(1, 47, "Whl/stick: bet 1-5", SMLSIZE)
+  lcd.drawText(1, 56, "ENT deal  SA rules", SMLSIZE)
 end
 
 local function run(event)
   if event == EVT_VIRTUAL_EXIT then
-    return 2
+    if state == "rules" then
+      closeRules()
+      event = 0
+    else
+      return 2
+    end
   end
+  local now = getTime()
+  local dt = (now - (lastTime or now)) / 100
+  lastTime = now
+  if dt > 0.08 then dt = 0.08 end
 
   local sw = switchPress()
   local fl = readFlick()
@@ -282,20 +338,43 @@ local function run(event)
   local prv = (event == EVT_VIRTUAL_PREV)
 
   lcd.clear()
+  if state == "rules" then
+    local ok, done = pcall(rules, event, dt)
+    if ok and not done then return 0 end
+    closeRules()
+    lcd.clear()
+    enter, sw, nxt, prv, fl = false, nil, false, false, nil
+  end
+
   if state == "title" then
+    if not seen then
+      openRules()
+      return 0
+    end
+    if nxt or prv or fl == "u" or fl == "d" then menu = 3 - menu end
     lcd.drawText(LCD_W / 2 - 22, 2, "POKER", MIDSIZE + INVERS)
-    lcd.drawText(2, 18, "Jacks or Better", SMLSIZE)
-    lcd.drawText(2, 28, "Wheel/stick: card", SMLSIZE)
-    lcd.drawText(2, 37, "SA hold   SD draw", SMLSIZE)
-    lcd.drawText(2, 52, "ENTER to start", SMLSIZE + BLINK)
-    if enter or sw then state = "bet" end
+    lcd.drawText(2, 17, "Jacks or Better", SMLSIZE)
+    lcd.drawText(20, 29, "Play", SMLSIZE + ((menu == 1) and INVERS or 0))
+    lcd.drawText(20, 39, "Rules + hand ranks", SMLSIZE + ((menu == 2) and INVERS or 0))
+    lcd.drawText(1, 56, "Whl/stk move ENT ok", SMLSIZE)
+    if enter or sw then
+      if menu == 1 then
+        state = "bet"
+      else
+        openRules()
+        return 0
+      end
+    end
   elseif state == "bet" then
     local maxb = math.min(5, credits)
     if nxt or fl == "r" or fl == "u" then bet = bet + 1 end
     if prv or fl == "l" or fl == "d" then bet = bet - 1 end
     if bet > maxb then bet = maxb end
     if bet < 1 then bet = 1 end
-    if enter or sw == "sd" then
+    if sw == "sa" then
+      openRules()
+      return 0
+    elseif enter or sw == "sd" then
       deal()
     else
       drawHeader()
@@ -321,6 +400,7 @@ local function run(event)
   else
     lcd.drawText(LCD_W / 2 - 40, 10, "OUT OF CREDITS", SMLSIZE + INVERS)
     lcd.drawText(LCD_W / 2 - 36, 30, "ENTER to restart", SMLSIZE)
+    lcd.drawText(1, 56, "RTN: leave game", SMLSIZE)
     if enter then
       credits, bet = START_CREDITS, 1
       state = "bet"
@@ -336,14 +416,14 @@ local function run(event)
       else
         lcd.drawText(1, 48, "Pick cards to hold", SMLSIZE)
       end
-      lcd.drawText(1, 56, "SA hold  SD draw", SMLSIZE)
+      lcd.drawText(1, 56, "Whl<> SA hold SD draw", SMLSIZE)
     else
       if win > 0 then
         lcd.drawText(1, 48, handName(result) .. " +" .. win, SMLSIZE + INVERS)
       else
         lcd.drawText(1, 48, "No win", SMLSIZE)
       end
-      lcd.drawText(1, 56, "ENTER: next hand", SMLSIZE)
+      lcd.drawText(1, 56, "ENT/SA/SD: next hand", SMLSIZE)
     end
   end
   return 0
