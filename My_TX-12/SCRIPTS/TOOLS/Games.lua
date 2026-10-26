@@ -11,9 +11,15 @@ local DIR = "/SCRIPTS/GAMES/"
 local ROWS = 6
 
 local KNOWN = {
-  "Game-2048.lua", "Game-Asteroids.lua", "Game-Breakout.lua", "Game-Flappy.lua",
-  "Game-Invaders.lua", "Game-PacMan.lua", "Game-Pinball.lua", "Game-Pong.lua",
-  "Game-Simulator.lua", "Game-Snake.lua", "Game-X-Tris.lua",
+  "Game-2048.lua", "Game-Artillery.lua", "Game-Asteroids.lua",
+  "Game-Battleship.lua", "Game-Blackjack.lua", "Game-Breakout.lua",
+  "Game-CrossyRoad.lua", "Game-Dino.lua", "Game-DonkeyKong.lua",
+  "Game-DoodleJump.lua", "Game-Flappy.lua", "Game-GeometryDash.lua",
+  "Game-Invaders.lua", "Game-Minesweeper.lua", "Game-PacMan.lua",
+  "Game-Pinball.lua", "Game-Plinko.lua", "Game-Poker.lua", "Game-Pong.lua",
+  "Game-Racer.lua", "Game-Rhythm.lua", "Game-Simon.lua",
+  "Game-Simulator.lua", "Game-Snake.lua", "Game-Tamagotchi.lua",
+  "Game-TowerDefense.lua", "Game-X-Tris.lua",
 }
 
 local games, sel, top, game, err

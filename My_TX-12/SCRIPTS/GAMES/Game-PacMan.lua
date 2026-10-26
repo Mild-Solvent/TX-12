@@ -164,9 +164,11 @@ end
 
 local function arrive(a)
   local dx, dy = vec(a.dir)
-  a.c = (a.c - 1 + dx) % MW + 1
-  a.r = a.r + dy
+  local c, r = (a.c - 1 + dx) % MW + 1, a.r + dy
   a.t = 0
+  -- never step Pac-Man into a wall, even if his direction got mixed up
+  if a == pac and not walkable(c, r) then return end
+  a.c, a.r = c, r
 end
 
 local function movePac(dt)
