@@ -30,7 +30,8 @@ header { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid v
 #stats { color: var(--dim); }
 #main { display: flex; gap: 10px; padding: 10px 12px; align-items: flex-start; }
 #palette { width: 190px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
-#palette .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#palette .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; max-height: 62vh; overflow-y: auto; }
+#palette .pcat { grid-column: 1 / -1; color: var(--dim); font-size: 11px; margin-top: 4px; border-bottom: 1px solid var(--line); }
 .tilebtn { display: flex; align-items: center; gap: 5px; padding: 3px 4px; text-align: left; font-size: 11px; line-height: 1.15; }
 .tilebtn canvas { flex: none; image-rendering: pixelated; background: var(--lcd-bg); border-radius: 2px; }
 .tilebtn b { font-family: ui-monospace, Consolas, monospace; }
@@ -57,9 +58,11 @@ table.list td, table.list th { padding: 2px 8px; border-bottom: 1px solid var(--
 table.list tr.tight td { color: var(--bad); }
 table.list tr:hover td { background: var(--panel2); cursor: pointer; }
 #presslist { max-height: 300px; overflow: auto; }
-#roll { display: block; background: #15181c; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
-#rollwrap { overflow-x: auto; max-width: 100%; }
+#roll { display: block; background: #15181c; cursor: crosshair; }
+#rollwrap { overflow: auto; max-width: 100%; height: 330px; margin-top: 8px; border: 1px solid var(--line); border-radius: 4px; }
 #help li { margin: 3px 0; }
+.lamp { font: 11px ui-monospace, Consolas, monospace; padding: 1px 5px; border: 1px solid var(--line); border-radius: 3px; color: var(--dim); }
+.lamp.on { background: var(--good); color: #0b1520; border-color: var(--good); }
 .kbd { font-family: ui-monospace, Consolas, monospace; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
 #toast { position: fixed; bottom: 14px; right: 14px; background: var(--panel2); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 6px; display: none; max-width: 420px; z-index: 9; }
 dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: min(760px, 92vw); }
@@ -144,13 +147,14 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
         <button id="bWatch" title="Plays back the press list found by Check beatable">Watch solver run</button>
         <label>speed <select id="fSpeed"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option></select></label>
         <label><input id="fPlayMusic" type="checkbox" checked> music</label>
+        <span id="holdLamp" class="lamp" title="SA held">SA</span>
       </div>
     </div>
     <div style="max-width:440px">
-      <div id="playinfo" class="note">Press <b>Play</b>. Jump: <span class="kbd">Space</span> / <span class="kbd">&uarr;</span> / <span class="kbd">W</span> / <span class="kbd">Enter</span> or click the screen.</div>
-      <div class="note">Same physics as <code>GDASH/phys.lua</code>: fixed 20 ms steps, a press is remembered for 120 ms, one press per key-down (holding does nothing, like SA/SD on the radio).
-      Practice: <span class="kbd">C</span> = checkpoint (only while on the ground, max 30), <span class="kbd">X</span> = remove last. <span class="kbd">R</span> = restart, <span class="kbd">Esc</span> = stop.
-      Deaths are marked with a red &times; in the editor.</div>
+      <div id="playinfo" class="note">Press <b>Play</b>. <span class="kbd">Space</span> / <span class="kbd">&uarr;</span> / <span class="kbd">W</span> / mouse button on the screen = <b>SA</b>: held as long as you hold it (ship, wave, robot, dash orbs). <span class="kbd">Enter</span> = the radio's ENTER: a tap only.</div>
+      <div class="note">Same physics as <code>GDASH/phys.lua</code>: fixed 20 ms steps, a press is remembered for 120 ms, holding in cube/ball/robot mode jumps again on every landing.
+      Practice: <span class="kbd">C</span> = checkpoint (max 15, like the radio), <span class="kbd">X</span> = remove last. <span class="kbd">R</span> = restart, <span class="kbd">Esc</span> = stop.
+      Deaths are marked with a red &times; in the editor. The SA lamp shows when the button is held.</div>
     </div>
   </div>
 </section>
@@ -160,10 +164,12 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
     <button id="bSolve">Check beatable</button>
     <button id="bSolveStop" disabled>Cancel</button>
     <label>min. gap between presses <input id="fGap" type="number" min="1" max="20" value="5"> steps (&times;20 ms)</label>
+    <label>min. hold <input id="fHold" type="number" min="1" max="20" value="1"> steps</label>
+    <label title="steps SA must stay released before the next press">min. release <input id="fRel" type="number" min="1" max="20" value="3"> steps</label>
     <label>flag windows under <input id="fTight" type="number" min="20" max="200" step="20" value="60"> ms</label>
     <label><input id="fTrace" type="checkbox" checked> show path</label>
   </div>
-  <div id="solveout" class="note">Port of <code>tools/gdash/solve.js</code>: breadth-first search over press times on the 20 ms physics grid (states merged by position/speed/gravity/mode, at most 3000 kept per step, presses at least 100 ms apart), then every press of the found run is moved &plusmn;1..5 steps to measure its window (the shifted run must survive 2 more seconds).</div>
+  <div id="solveout" class="note">Port of <code>tools/gdash/solve.js</code> (it runs this same code): breadth-first search over the 20 ms physics steps where the input is SA held or released at every step, so taps and holds (ship, wave, robot, dash orbs) are both searched. States are merged by position/speed/gravity/mode, at most 3000 kept per step (thinned to different heights); presses at least 100 ms apart and 60 ms released in between. Then every press (and every release of a hold) of the found run is moved &plusmn;1..5 steps to measure its window (the changed run must survive 2 more seconds).</div>
   <div id="presslist"></div>
 </section>
 
@@ -174,26 +180,23 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
     <label>u = <input id="fU" type="text" size="5"> s per unit</label>
     <span id="mInfo" style="color:var(--dim)"></span>
   </div>
-  <div id="rollwrap" style="margin-top:8px"><canvas id="roll" width="900" height="220"></canvas></div>
+  <div id="rollwrap"><canvas id="roll" width="900" height="580"></canvas></div>
   <div class="bar" style="margin-top:6px">
-    <button id="mAdd" title="Insert a note after the selected one">+ note</button>
-    <button id="mRest" title="Insert a rest after the selected one">+ rest</button>
-    <button id="mDel">Delete</button>
-    <button id="mLm">Length &minus;</button><button id="mLp">Length +</button>
-    <button id="mDn">Pitch &minus;</button><button id="mUp">Pitch +</button>
-    <button id="mOdn">Octave &minus;</button><button id="mOup">Octave +</button>
-    <button id="mLeft">&larr; Move</button><button id="mRight">Move &rarr;</button>
+    <span>new note length <b id="mLen" class="mono">2</b> units</span>
+    <button id="mLm" title="Shorter (also sets the selected notes)">Length &minus;</button><button id="mLp" title="Longer (also sets the selected notes)">Length +</button>
+    <button id="mTrim" title="Loop ends right after the last note">Trim loop to last note</button>
+    <button id="mBar" title="Extend the loop to the next 16-unit bar">Loop + to next bar</button>
     <span id="mSel" class="mono" style="color:var(--dim)"></span>
   </div>
   <h3>Tune text (<code>m</code>)</h3>
   <textarea id="fM" rows="3" spellcheck="false"></textarea>
   <div id="mErr" style="margin-top:4px"></div>
   <div class="note">Format (from <code>phys.lua</code>): tokens separated by spaces. A note is <code>&lt;letter&gt;[#]&lt;octave digit&gt;&lt;length digit&gt;</code>, e.g. <code>C42</code> = C4 for 2 units, <code>A#31</code> = A#3 for 1 unit. <code>R&lt;n&gt;</code> = rest of n units. One unit lasts <code>u</code> seconds. The tune loops and restarts with every attempt. Sharps only (no flats). Anything else plays as a 1-unit rest on the radio.
-  Piano roll: click a note to select it, click in its column at another height to set its pitch, right-click to turn it into a rest, mouse wheel = length. Keyboard when the roll is focused: arrows = pitch / select, <span class="kbd">+</span>/<span class="kbd">-</span> = length, <span class="kbd">Del</span>.</div>
+  <br><b>Piano roll</b> (like FL Studio): one column = one unit (thin lines), a beat = 4 units, a bar = 16 units (numbered). <b>Left click</b> an empty cell places a note with the current length (click again on it to hear it), <b>left drag</b> a note moves it in time and pitch, drag its <b>right edge</b> to change its length, <b>right click</b> (or right drag across notes) deletes. <b>Shift/Ctrl+drag</b> = box select (Shift adds). With the roll focused: <span class="kbd">Del</span> deletes the selection, <span class="kbd">Ctrl+C</span>/<span class="kbd">Ctrl+V</span> copy / paste at the mouse, <span class="kbd">Ctrl+A</span> selects all, arrows move the selection (<span class="kbd">Shift</span> = octave), <span class="kbd">Ctrl</span>+wheel on a note = length. The tune is one voice: a note placed over others cuts them. Gaps are written as rests; notes longer than 9 units as tied notes (<code>C49 C43</code>). The red line is the loop end. Click the keyboard on the left to hear a pitch.</div>
 </section>
 
 <section class="panel" id="p-export">
-  <div class="bar"><button id="bDownload2">Download L?.lua</button><button id="bCopy2">Copy to clipboard</button><span id="expinfo" style="color:var(--dim)"></span></div>
+  <div class="bar"><button id="bDownload2">Download L?.lua</button><button id="bCopy2">Copy to clipboard</button><label title="Write the rows letter by letter instead of run-length coded (bigger file, readable)"><input id="fPlain" type="checkbox"> plain rows</label><span id="expinfo" style="color:var(--dim)"></span></div>
   <div id="expwarn"></div>
   <textarea id="expText" rows="16" readonly spellcheck="false" style="margin-top:6px"></textarea>
   <div class="note">
@@ -217,7 +220,8 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
       <ul>
         <li>6 strings, bottom (ground) row first. Column <i>c</i> is 8 px wide; the cube (7&times;7) starts at x = 0 on the ground at speed 2 (90 px/s), cube mode, normal gravity.</li>
         <li>The level ends at x = (longest row length) &times; 8 + 16, so trailing empty columns in row 1 make the level longer. The editor keeps row 1 full length and trims the other rows, like <code>tools/gdash/build.js</code>.</li>
-        <li>Portals act on the whole column: when the cube's centre enters the column, every portal in it fires, whatever its row.</li>
+        <li>Portals act on the whole column: when the icon's centre enters the column, every portal in it fires once, whatever its row. You may stack several portals in one column (e.g. <code>D</code> + <code>W</code> = dual wave, <code>U</code> + <code>G</code> = upside-down UFO).</li>
+        <li><b>Compact rows:</b> a run of 4 or more equal tiles is written <code>c*N</code>, where <code>N</code> is one character whose code minus 32 is the count (<code>.*D</code> = 36 dots). The game keeps the rows coded in memory and decodes only the 128 columns around the icon, so a long level costs about its file size in RAM. Old files with plain rows still load; tick <i>plain rows</i> on the Export tab to write them plain.</li>
         <li>The first line <code>-- @Name|Difficulty</code> is what the level picker shows (the editor reads it on import and always writes it).</li>
         <li><b>Adding a level:</b> save it as the next free number, <code>L9.lua</code>, <code>L10.lua</code>, ... in <code>/SCRIPTS/GAMES/GDASH/</code> &mdash; no game change needed. The game counts L1, L2, ... until one is missing (max 99). Delete any old <code>.luac</code> of the same name.</li>
       </ul>
@@ -226,7 +230,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
       <h3>Editor controls</h3>
       <ul>
         <li><b>Left drag</b> paints the selected tile, <b>right drag</b> erases. Painting past the end makes the level longer.</li>
-        <li>Type a tile's character to pick it (<span class="kbd">#</span> <span class="kbd">=</span> <span class="kbd">^</span> <span class="kbd">v</span> <span class="kbd">o</span> <span class="kbd">q</span> <span class="kbd">p</span> <span class="kbd">G</span> <span class="kbd">g</span> <span class="kbd">U</span> <span class="kbd">C</span> <span class="kbd">1</span>-<span class="kbd">4</span>, <span class="kbd">.</span> = empty).</li>
+        <li>Type a tile's character to pick it (the character in the palette, e.g. <span class="kbd">#</span> <span class="kbd">^</span> <span class="kbd">o</span> <span class="kbd">S</span> <span class="kbd">W</span>; <span class="kbd">.</span> = empty). Upper and lower case are different tiles.</li>
         <li><b>Shift+drag</b> (or the Select tool) selects. <span class="kbd">Ctrl+C</span>/<span class="kbd">X</span>/<span class="kbd">V</span> copy / cut / paste (paste puts the bottom-left corner on the cell under the mouse), <span class="kbd">Del</span> clears, <span class="kbd">Esc</span> deselects.</li>
         <li><span class="kbd">Ctrl+Z</span> undo, <span class="kbd">Ctrl+Y</span> / <span class="kbd">Ctrl+Shift+Z</span> redo. Mouse wheel scrolls sideways.</li>
         <li><b>Insert cols</b> / <b>Delete cols</b> work on the selection's columns, or on N columns at the mouse.</li>
@@ -234,7 +238,23 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
         <li><b>Check beatable</b> before exporting. Tight presses (window under ~60 ms) are flagged red; the radio runs at 20-80 ms per frame, so those are very hard.</li>
       </ul>
       <h3>Seconds shown</h3>
-      <p>"run" = time for the cube to reach the end following the speed portals (exact, since speed does not depend on jumps). Also listed: the time at each constant speed 1-4.</p>
+      <p>"run" = time for the icon to reach the end following the speed portals (exact, since speed does not depend on input). Also listed: the time at each constant speed 0-4.</p>
+      <h3>Game modes (fixed 20 ms steps, px and px/s)</h3>
+      <table class="list">
+        <tr><th>mode</th><th>input</th><th>numbers</th></tr>
+        <tr><td>cube <code>C</code></td><td>press on a surface; hold = jump on every landing</td><td>jump 180, gravity 800: 18 px high, 0.45 s in the air</td></tr>
+        <tr><td>ufo <code>U</code></td><td>every press flaps</td><td>flap 135, gravity 520</td></tr>
+        <tr><td>ship <code>S</code></td><td>hold = up, release = down</td><td>+700 / -600 px/s&sup2;, max 150 px/s</td></tr>
+        <tr><td>ball <code>B</code></td><td>press on a surface flips gravity</td><td>push 60, gravity 700: floor to ceiling in ~0.27 s</td></tr>
+        <tr><td>wave <code>W</code></td><td>hold = up 45&deg;, release = down 45&deg;</td><td>vertical speed = forward speed (mini: x2)</td></tr>
+        <tr><td>robot <code>R</code></td><td>press on the ground; holding keeps rising</td><td>130 px/s for up to 0.16 s: tap 12 px, full hold 30 px</td></tr>
+        <tr><td>spider <code>X</code></td><td>press on a surface = teleport to the opposite one</td><td>gravity 800 when it falls off a ledge</td></tr>
+        <tr><td>swing <code>Z</code></td><td>every press flips gravity, also in the air</td><td>gravity 600, max 150 px/s</td></tr>
+      </table>
+      <p>Mini (<code>m</code>): 5&times;5 icon, jumps/orbs/pads x0.8, ship and swing accelerate x1.25, wave twice as steep. Every icon is drawn upside down with flipped gravity.
+      <b>Flying modes</b> (ufo, ship, wave, swing) use the whole 6-row field as their corridor: the ceiling line turns solid while you fly. Make a narrower corridor with blocks.
+      Speeds: 0 = 50, 1 = 70, 2 = 90, 3 = 110, 4 = 130 px/s.</p>
+      <p><b>Radio timing:</b> SA/SD are read once per frame (20-80 ms), so a hold is as exact as one frame and a "tap" may last a whole frame (robot: a tap on a slow 80 ms frame jumps ~20 px, not 12). ENTER is a tap only: it cannot hold a ship, wave or dash orb.</p>
     </div>
   </div>
 </section>
@@ -255,32 +275,61 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 "use strict";
 var GD = (function () {
   // ---- constants copied from GDASH/phys.lua ----
-  var GY = 58, CY = 10, S = 7, DT = 0.02;
-  var GC = 800, JV = 180, PADV = 250;
-  var GU = 520, UV = 135;
-  var BUF = 0.12;
+  var GY = 58, CY = 10, S = 7, DT = 0.02, BUF = 0.12;
+  var GC = 800, JV = 180, PADV = 250;   // cube/robot/spider gravity, jump, yellow pad
+  var GU = 520, UV = 135;               // ufo gravity, flap
+  var SHU = 700, SHD = 600, FM = 150;   // ship accel held/released, ship+swing max speed
+  var GB = 700, BV = 60;                // ball gravity, flip push
+  var RJV = 130, RT = 0.16;             // robot rise speed while held, max rise time
+  var SWG = 600;                        // swing gravity
   var NOTES = "C C#D D#E F F#G G#A A#B ";
-  var PX = 28; // screen x of the cube (Game-GeometryDash.lua)
+  var PX = 28; // screen x of the icon (Game-GeometryDash.lua / draw.lua)
+  var MODES = ["cube", "ufo", "ship", "ball", "wave", "robot", "spider", "swing"];
 
+  // cat: palette group. Order = palette order.
   var TILES = [
-    { ch: ".", name: "Empty", desc: "Nothing. Right-click erases to this." },
-    { ch: "#", name: "Block", desc: "Solid 8x8. Land on its top (its bottom with flipped gravity). Running into its side kills." },
-    { ch: "=", name: "Slab", desc: "Solid top half (8x4) of the cell. Land on it or under it; its side kills." },
-    { ch: "^", name: "Spike", desc: "Kills. Hitbox 4x5 px at the bottom centre of the cell." },
-    { ch: "v", name: "Hanging spike", desc: "Kills. Hitbox 4x5 px at the top centre of the cell." },
-    { ch: "o", name: "Jump orb", desc: "Press while touching it (reach 4 px around the cube): jump at jump speed, also in the air. Each orb works once per touch." },
-    { ch: "q", name: "Gravity orb", desc: "Press while touching it: gravity flips, small push (60 px/s) the new way." },
-    { ch: "p", name: "Jump pad", desc: "Touch it: launched at 250 px/s (no press needed). Draws at the bottom of its cell." },
-    { ch: "G", name: "Gravity up", desc: "Portal (whole column): gravity points up, you run on the ceiling." },
-    { ch: "g", name: "Gravity down", desc: "Portal (whole column): normal gravity." },
-    { ch: "U", name: "UFO portal", desc: "Portal (whole column): UFO mode. Every press flaps (135 px/s), even in the air; weaker gravity (520)." },
-    { ch: "C", name: "Cube portal", desc: "Portal (whole column): back to cube mode (jump only from the ground, 180 px/s, gravity 800)." },
-    { ch: "1", name: "Speed 1", desc: "Portal (whole column): 70 px/s." },
-    { ch: "2", name: "Speed 2", desc: "Portal (whole column): 90 px/s (start speed)." },
-    { ch: "3", name: "Speed 3", desc: "Portal (whole column): 110 px/s." },
-    { ch: "4", name: "Speed 4", desc: "Portal (whole column): 130 px/s." }
+    { ch: ".", cat: "Basic", name: "Empty", desc: "Nothing. Right-click erases to this." },
+    { ch: "#", cat: "Basic", name: "Block", desc: "Solid 8x8. Land on its top (its bottom with flipped gravity); ship, wave, ball etc. slide along it. Running into its side kills." },
+    { ch: "=", cat: "Basic", name: "Slab", desc: "Solid top half (8x4) of the cell. Land on it or under it; its side kills." },
+    { ch: "^", cat: "Basic", name: "Spike", desc: "Kills. Hitbox 4x5 px at the bottom centre of the cell." },
+    { ch: "v", cat: "Basic", name: "Hanging spike", desc: "Kills. Hitbox 4x5 px at the top centre of the cell." },
+    { ch: "o", cat: "Orbs", name: "Yellow orb", desc: "Press while touching it (reach 4 px around the icon): jump at 180 px/s, also in the air. Each orb works once per touch." },
+    { ch: "i", cat: "Orbs", name: "Pink orb", desc: "Press while touching: small jump (140 px/s)." },
+    { ch: "r", cat: "Orbs", name: "Red orb", desc: "Press while touching: big jump (230 px/s)." },
+    { ch: "q", cat: "Orbs", name: "Blue orb", desc: "Press while touching: gravity flips, small push (60 px/s) the new way." },
+    { ch: "e", cat: "Orbs", name: "Green orb", desc: "Press while touching: gravity flips and you jump (180 px/s) away from the new floor." },
+    { ch: "b", cat: "Orbs", name: "Black orb", desc: "Press while touching: slammed down toward the floor at 300 px/s." },
+    { ch: "a", cat: "Orbs", name: "Green dash orb", desc: "Press while touching, keep holding: you dash in a straight line (no gravity) until you release. Needs SA/SD held on the radio (ENTER is a tap only)." },
+    { ch: "h", cat: "Orbs", name: "Pink dash orb", desc: "Like the green dash orb, but gravity flips first." },
+    { ch: "p", cat: "Pads", name: "Yellow pad", desc: "Touch it: launched at 250 px/s (no press needed). Pads draw at the bottom of their cell; the whole cell triggers." },
+    { ch: "k", cat: "Pads", name: "Pink pad", desc: "Touch: small launch (180 px/s)." },
+    { ch: "f", cat: "Pads", name: "Red pad", desc: "Touch: big launch (300 px/s) - from the ground it reaches the ceiling." },
+    { ch: "u", cat: "Pads", name: "Blue pad", desc: "Touch: gravity flips, push 120 px/s toward the new floor." },
+    { ch: "w", cat: "Pads", name: "Spider pad", desc: "Touch: teleported straight to the surface above (below with flipped gravity), gravity flips." },
+    { ch: "C", cat: "Modes", name: "Cube portal", desc: "Cube: press (or hold) on the ground = jump 180 px/s, gravity 800. Holding jumps again on every landing." },
+    { ch: "S", cat: "Modes", name: "Ship portal", desc: "Ship: hold = accelerate up (700 px/s²), release = fall (600 px/s²), max 150 px/s. Slides on floors and ceilings." },
+    { ch: "B", cat: "Modes", name: "Ball portal", desc: "Ball: press on a surface = gravity flips (push 60, gravity 700). Rolls on floor and ceiling. Holding flips again on every landing." },
+    { ch: "U", cat: "Modes", name: "UFO portal", desc: "UFO: every press flaps (135 px/s), even in the air; gravity 520. Holding does nothing extra." },
+    { ch: "W", cat: "Modes", name: "Wave portal", desc: "Wave: hold = straight up at 45°, release = straight down at 45° (mini: twice as steep). No gravity; slides on floor/ceiling." },
+    { ch: "R", cat: "Modes", name: "Robot portal", desc: "Robot: press on the ground = jump; keep holding to rise at 130 px/s for up to 0.16 s (higher jump). Tap = 12 px, full hold = 30 px." },
+    { ch: "X", cat: "Modes", name: "Spider portal", desc: "Spider: press on a surface = instantly teleported to the surface above (below with flipped gravity), gravity flips. Tap only." },
+    { ch: "Z", cat: "Modes", name: "Swing portal", desc: "Swing: every press flips gravity, also in the air; smooth arc (gravity 600, max 150 px/s)." },
+    { ch: "G", cat: "Portals", name: "Gravity up", desc: "Portal: gravity points up, you run on the ceiling. In dual mode the second icon gets the opposite." },
+    { ch: "g", cat: "Portals", name: "Gravity down", desc: "Portal: normal gravity (dual: the second icon gets the opposite)." },
+    { ch: "m", cat: "Portals", name: "Mini portal", desc: "Portal: mini size (5x5 px). Jumps, flaps, orbs and pads x0.8; ship/swing accelerate x1.25; mini wave climbs at 63° (2:1)." },
+    { ch: "n", cat: "Portals", name: "Normal size", desc: "Portal: back to normal size (7x7 px)." },
+    { ch: "D", cat: "Portals", name: "Dual portal", desc: "Portal: a second icon appears mirrored on the opposite gravity (top/bottom swapped), same mode and input. If either dies, you die." },
+    { ch: "d", cat: "Portals", name: "Single portal", desc: "Portal: back to one icon (the second one vanishes)." },
+    { ch: "T", cat: "Portals", name: "Teleport", desc: "Portal: the icon jumps to the row of the teleport exit t in the SAME column (speed kept). Put one t in the column." },
+    { ch: "t", cat: "Portals", name: "Teleport exit", desc: "Marks where T sends you: the icon lands in this cell (bottom-aligned, top-aligned with flipped gravity). Only read by a T in the same column." },
+    { ch: "0", cat: "Speed", name: "Speed 0.5x", desc: "Portal: 50 px/s (slow)." },
+    { ch: "1", cat: "Speed", name: "Speed 1", desc: "Portal: 70 px/s." },
+    { ch: "2", cat: "Speed", name: "Speed 2", desc: "Portal: 90 px/s (start speed)." },
+    { ch: "3", cat: "Speed", name: "Speed 3", desc: "Portal: 110 px/s." },
+    { ch: "4", cat: "Speed", name: "Speed 4", desc: "Portal: 130 px/s." }
   ];
   var TILE_CHARS = TILES.map(function (t) { return t.ch; }).join("");
+  var PORTAL_CHARS = "CUSBWRXZGg01234mnDdT";
 
   // ------------------------------------------------------------------
   // Lua level-file parser. Reads `return { "row", ..., u = n, m = "..." }`
@@ -387,10 +436,10 @@ var GD = (function () {
       }
       pos[idx++] = value();
     }
-    var rows = [];
+    var rows = [], compact = false;
     for (var r = 1; r <= 6; r++) {
       var v = pos[r];
-      if (v && v.t === "str") rows.push(v.v);
+      if (v && v.t === "str") { if (/\*/.test(v.v)) compact = true; rows.push(decodeRow(v.v)); }
       else { rows.push(""); if (v && !(v.t === "id" && v.v === "nil")) warnings.push("row " + r + " is not a string, treated as empty"); }
     }
     for (var e in pos) if (+e > 6) warnings.push("extra value #" + e + " ignored (the game reads 6 rows)");
@@ -414,7 +463,7 @@ var GD = (function () {
       name: hdr ? hdr.name : "",
       diff: hdr ? hdr.diff : "",
       hasHeader: !!hdr,
-      rows: rows, u: u, m: mel, warnings: warnings
+      rows: rows, u: u, m: mel, warnings: warnings, compact: compact
     };
   }
 
@@ -430,15 +479,15 @@ var GD = (function () {
     return out + '"';
   }
 
-  // Level -> L<n>.lua text, same layout as tools/gdash/build.js plus the
-  // "-- @Name|Difficulty" first line. Row 1 keeps its full length (that
-  // fixes where the level ends), rows 2-6 lose trailing dots.
-  function exportLevel(lv) {
-    var rows = [], W = 0, r;
+  // Level -> L<n>.lua text, same layout as tools/gdash/build.js levelFile().
+  // Row 1 keeps its full length (that fixes where the level ends), rows 2-6
+  // lose trailing dots. Rows are run-length coded unless opts.plain.
+  function exportLevel(lv, opts) {
+    var plain = !!(opts && opts.plain), rows = [], W = 0, r;
     for (r = 0; r < 6; r++) { var s = lv.rows[r] || ""; rows.push(s); if (s.length > W) W = s.length; }
     var outRows = rows.map(function (s, i) {
-      if (i === 0) { while (s.length < W) s += "."; return s; }
-      return s.replace(/\.+$/, "");
+      if (i === 0) { while (s.length < W) s += "."; } else s = s.replace(/\.+$/, "");
+      return plain ? s : encodeRow(s);
     });
     var name = String(lv.name == null ? "" : lv.name).replace(/[|\x00-\x1f\x7f]/g, "");
     var diff = String(lv.diff == null ? "" : lv.diff).replace(/[\x00-\x1f\x7f]/g, "");
@@ -448,12 +497,39 @@ var GD = (function () {
     return "-- @" + name + "|" + diff + "\n" +
       "-- Geometry Dash level " + n + ": rows bottom (ground) to top, tiles see GDASH/phys.lua\n" +
       "-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n" +
+      (plain ? "" : "-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\n") +
       "return {\n" + outRows.map(luaQuote).join(",\n") +
       (hasMusic ? ",\nu = " + u + ",\nm = " + luaQuote(lv.m) : "") + "\n}\n";
   }
 
   // ------------------------------------------------------------------
-  // Physics: line-by-line port of GDASH/phys.lua
+  // Compact rows (same as tools/gdash/build.js): a run of n >= 4 equal
+  // chars is "c*N" with N = char(32 + n), n <= 94, never n = 60 ("\").
+  // ------------------------------------------------------------------
+  function encodeRow(s) {
+    var out = "", i = 0;
+    while (i < s.length) {
+      var j = i;
+      while (j < s.length && s[j] === s[i]) j++;
+      var n = j - i;
+      while (n > 0) {
+        var k = Math.min(n, 94);
+        if (k === 60) k = 59;
+        if (k >= 4) out += s[i] + "*" + String.fromCharCode(32 + k);
+        else out += s[i].repeat(k);
+        n -= k;
+      }
+      i = j;
+    }
+    return out;
+  }
+  // exactly what phys.lua does: string.gsub(s, "(.)%*(.)", rep)
+  function decodeRow(s) {
+    return String(s).replace(/([\s\S])\*([\s\S])/g, function (m, c, n) { return c.repeat(Math.max(0, n.charCodeAt(0) - 32)); });
+  }
+
+  // ------------------------------------------------------------------
+  // Physics: line-by-line port of GDASH/phys.lua. step(p, press, hold).
   // ------------------------------------------------------------------
   function rowTop(r) { return GY - 8 * r - 8; }
   function rowOf(y) {
@@ -470,17 +546,22 @@ var GD = (function () {
   function hit(ax, ay, aw, ah, bx, by, bw, bh) {
     return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
   }
+  function size(p) { return p.mi ? 5 : 7; }
   function newPlayer() {
-    return { x: 0, y: GY - S, vy: 0, g: 1, ufo: false, spd: 90, buf: 0,
-      gr: true, orb: -1, pad: -1, dead: false, won: false, ang: 0 };
+    return { x: 0, y: GY - 7, vy: 0, g: 1, m: 0, mi: false, du: false, spd: 90, pc: -1,
+      buf: 0, gr: true, orb: -1, pad: -1, rt: 0, da: false,
+      y2: 0, vy2: 0, g2: -1, gr2: false, buf2: 0, orb2: -1, pad2: -1, rt2: 0, da2: false,
+      dead: false, won: false };
   }
   function clone(a) { var b = {}; for (var k in a) b[k] = a[k]; return b; }
+  var SWAP = ["y", "y2", "vy", "vy2", "g", "g2", "gr", "gr2", "buf", "buf2", "orb", "orb2", "pad", "pad2", "rt", "rt2", "da", "da2"];
+  function swap(p) { for (var i = 0; i < SWAP.length; i += 2) { var a = SWAP[i], b = SWAP[i + 1], t = p[a]; p[a] = p[b]; p[b] = t; } }
 
-  // rows: array of up to 6 strings (index 0 = ground row)
+  // rows: array of up to 6 strings (index 0 = ground row), plain or compact
   function makeLevel(rows) {
     var R = [], len = 0;
     for (var i = 0; i < 6; i++) {
-      var s = rows && typeof rows[i] === "string" ? rows[i] : "";
+      var s = rows && typeof rows[i] === "string" ? decodeRow(rows[i]) : "";
       R.push(s); if (s.length > len) len = s.length;
     }
     var endX = len * 8 + 16;
@@ -490,90 +571,200 @@ var GD = (function () {
       if (c >= s.length) return 46;
       return s.charCodeAt(c) & 255;
     }
-    function step(p, press) {
-      if (press) p.buf = BUF; else if (p.buf > 0) p.buf = p.buf - DT;
-      var cc = Math.floor((p.x + 3) / 8), r, c, t;
-      for (r = 0; r <= 5; r++) {
-        t = tile(cc, r);
-        if (t === 71) p.g = -1;
-        else if (t === 103) p.g = 1;
-        else if (t === 85) p.ufo = true;
-        else if (t === 67) p.ufo = false;
-        else if (t >= 49 && t <= 52) p.spd = 50 + 20 * (t - 48);
-      }
-      var g = p.g;
-      if (p.buf > 0) {
-        if (p.ufo) { p.vy = -UV * g; p.buf = 0; p.gr = false; }
-        else if (p.gr) { p.vy = -JV * g; p.buf = 0; p.gr = false; }
-      }
-      var c0 = Math.floor((p.x - 4) / 8), c1 = Math.floor((p.x + S + 3) / 8);
-      var r0 = rowOf(p.y + S + 3), r1 = rowOf(p.y - 4);
-      for (c = c0; c <= c1; c++) {
-        for (r = r0; r <= r1; r++) {
-          t = tile(c, r);
-          var key = c * 8 + r;
-          if ((t === 111 || t === 113) && p.buf > 0 && key !== p.orb &&
-              hit(p.x - 4, p.y - 4, S + 8, S + 8, c * 8, rowTop(r), 8, 8)) {
-            p.orb = key; p.buf = 0; p.gr = false;
-            if (t === 111) p.vy = -JV * g; else { p.g = -g; g = -g; p.vy = 60 * g; }
-          } else if (t === 112 && key !== p.pad && hit(p.x, p.y, S, S, c * 8, rowTop(r), 8, 8)) {
-            p.pad = key; p.vy = -PADV * g; p.gr = false;
-          }
-        }
-      }
-      p.x = p.x + p.spd * DT;
-      var gg = GC;
-      if (p.ufo) gg = GU;
-      p.vy = p.vy + gg * g * DT;
-      if (p.vy > 350) p.vy = 350; else if (p.vy < -350) p.vy = -350;
-      var py = p.y;
-      p.y = p.y + p.vy * DT;
-      p.gr = false;
-      c0 = Math.floor((p.x + 1) / 8); c1 = Math.floor((p.x + S - 2) / 8);
-      r0 = rowOf(p.y + S - 1); r1 = rowOf(p.y);
-      for (c = c0; c <= c1; c++) {
-        for (r = r0; r <= r1; r++) {
+    function spider(p, s) {
+      var g = p.g, c0 = Math.floor((p.x + 1) / 8), c1 = Math.floor((p.x + s - 2) / 8);
+      var ny = CY;
+      if (g < 0) ny = GY - s;
+      for (var c = c0; c <= c1; c++) {
+        for (var r = 0; r <= 5; r++) {
           var sb = solid(tile(c, r), r);
           if (sb) {
             var top = sb[0], bot = sb[1];
-            if (p.y < bot && p.y + S > top) {
-              if (p.vy * g >= 0) {
-                if (g > 0 && py + S <= top + 3) { p.y = top - S; p.vy = 0; p.gr = true; }
-                else if (g < 0 && py >= bot - 3) { p.y = bot; p.vy = 0; p.gr = true; }
-              } else {
-                if (g > 0 && py >= bot - 3) { p.y = bot; p.vy = 0; }
-                else if (g < 0 && py + S <= top + 3) { p.y = top - S; p.vy = 0; }
+            if (g > 0 && bot <= p.y + 1 && bot > ny) ny = bot;
+            else if (g < 0 && top >= p.y + s - 1 && top - s < ny) ny = top - s;
+          }
+        }
+      }
+      p.y = ny; p.g = -g; p.vy = 0; p.gr = false;
+    }
+    function portals(p, cc) {
+      var tp = false, er = null;
+      for (var r = 0; r <= 5; r++) {
+        var t = tile(cc, r);
+        if (t === 71 || t === 103) {
+          p.g = 1;
+          if (t === 71) p.g = -1;
+          p.g2 = -p.g;
+        } else if (t >= 48 && t <= 52) p.spd = 50 + 20 * (t - 48);
+        else if (t === 109 || t === 110) {
+          var mi = t === 109;
+          if (mi !== p.mi) {
+            var d = 2;
+            if (!mi) d = -2;
+            if (p.g > 0) p.y = p.y + d;
+            if (p.g2 > 0) p.y2 = p.y2 + d;
+            p.mi = mi;
+          }
+        } else if (t === 68) {
+          if (!p.du) {
+            var y2 = CY + GY - size(p) - p.y;
+            p.du = true; p.y2 = y2; p.vy2 = -p.vy; p.g2 = -p.g; p.gr2 = p.gr; p.buf2 = p.buf;
+            p.orb2 = -1; p.pad2 = -1; p.rt2 = 0; p.da2 = false;
+          }
+        } else if (t === 100) p.du = false;
+        else if (t === 84) tp = true;
+        else if (t === 116) er = r;
+        else if (t > 64) {
+          var i = "CUSBWRXZ".indexOf(String.fromCharCode(t));
+          if (i >= 0) { p.m = i; p.rt = 0; p.da = false; p.rt2 = 0; p.da2 = false; }
+        }
+      }
+      if (tp && er !== null) {
+        p.y = rowTop(er);
+        if (p.g > 0) p.y = p.y + 8 - size(p);
+        p.y2 = CY + GY - size(p) - p.y;
+      }
+    }
+    function pre(p, hold) {
+      var s = size(p), m = p.m, g = p.g, k = 1;
+      if (p.mi) k = 0.8;
+      var b = p.buf > 0;
+      if (m === 1 || m === 7) {
+        if (b) {
+          p.buf = 0; p.gr = false; b = false;
+          if (m === 1) p.vy = -UV * k * g; else { p.g = -g; g = -g; }
+        }
+      } else if (m === 0 || m === 3 || m === 5 || m === 6) {
+        if (p.gr && (b || (hold && m !== 6))) {
+          p.buf = 0; p.gr = false; b = false;
+          if (m === 3) { p.g = -g; g = -g; p.vy = BV * g; }
+          else if (m === 6) { spider(p, s); g = p.g; }
+          else if (m === 5) { p.vy = -RJV * k * g; p.rt = RT; }
+          else p.vy = -JV * k * g;
+        }
+      }
+      var c0 = Math.floor((p.x - 4) / 8), c1 = Math.floor((p.x + s + 3) / 8);
+      var r0 = rowOf(p.y + s + 3), r1 = rowOf(p.y - 4);
+      for (var c = c0; c <= c1; c++) {
+        for (var r = r0; r <= r1; r++) {
+          var t = tile(c, r);
+          if (t > 96) {
+            var key = c * 8 + r, ch = String.fromCharCode(t);
+            var o = "oirqebah".indexOf(ch) + 1, d = "pkfuw".indexOf(ch) + 1;
+            if (m === 4) {
+              if (o === 1 || o === 2 || o === 3 || o === 6) o = 0;
+              if (d && d < 4) d = 0;
+            }
+            if (o && b && key !== p.orb && hit(p.x - 4, p.y - 4, s + 8, s + 8, c * 8, rowTop(r), 8, 8)) {
+              p.orb = key; p.buf = 0; p.gr = false; p.rt = 0; b = false;
+              if (o === 4 || o === 5 || o === 8) { p.g = -g; g = -g; }
+              if (o >= 7) { p.da = true; p.vy = 0; }
+              else if (o === 4) p.vy = 60 * g;
+              else {
+                var v = JV;
+                if (o === 2) v = 140; else if (o === 3) v = 230; else if (o === 6) v = -300;
+                p.vy = -v * k * g;
+              }
+            } else if (d && key !== p.pad && hit(p.x, p.y, s, s, c * 8, rowTop(r), 8, 8)) {
+              p.pad = key; p.gr = false; p.rt = 0;
+              if (d === 5) { spider(p, s); g = p.g; }
+              else if (d === 4) { p.g = -g; g = -g; p.vy = 120 * g; }
+              else {
+                var v2 = PADV;
+                if (d === 2) v2 = 180; else if (d === 3) v2 = 300;
+                p.vy = -v2 * k * g;
               }
             }
           }
         }
       }
-      if (p.y + S >= GY) {
-        p.y = GY - S; p.vy = 0;
+    }
+    function post(p, hold) {
+      var s = size(p), m = p.m, g = p.g, k = 1, c, r, c0, c1, r0, r1, sb;
+      if (p.mi) k = 0.8;
+      if (p.da && !hold) p.da = false;
+      if (p.da) p.vy = 0;
+      else if (m === 4) {
+        var w = p.spd;
+        if (p.mi) w = w * 2;
+        if (hold) p.vy = -w * g; else p.vy = w * g;
+      } else if (m === 2 || m === 7) {
+        var a = SHD;
+        if (m === 7) a = SWG; else if (hold) a = -SHU;
+        if (p.mi) a = a * 1.25;
+        p.vy = p.vy + a * g * DT;
+        if (p.vy > FM) p.vy = FM; else if (p.vy < -FM) p.vy = -FM;
+      } else if (m === 5 && p.rt > 0 && hold) {
+        p.vy = -RJV * k * g; p.rt = p.rt - DT;
+      } else {
+        p.rt = 0;
+        var gg = GC;
+        if (m === 1) gg = GU; else if (m === 3) gg = GB;
+        p.vy = p.vy + gg * g * DT;
+      }
+      if (p.vy > 350) p.vy = 350; else if (p.vy < -350) p.vy = -350;
+      var py = p.y;
+      p.y = p.y + p.vy * DT;
+      p.gr = false;
+      c0 = Math.floor((p.x + 1) / 8); c1 = Math.floor((p.x + s - 2) / 8);
+      r0 = rowOf(p.y + s - 1); r1 = rowOf(p.y - 1);
+      for (c = c0; c <= c1; c++) {
+        for (r = r0; r <= r1; r++) {
+          sb = solid(tile(c, r), r);
+          if (sb) {
+            var top = sb[0], bot = sb[1];
+            if (p.y < bot && p.y + s > top) {
+              if (p.vy * g >= 0) {
+                if (g > 0 && py + s <= top + 3) { p.y = top - s; p.vy = 0; p.gr = true; }
+                else if (g < 0 && py >= bot - 3) { p.y = bot; p.vy = 0; p.gr = true; }
+              } else {
+                if (g > 0 && py >= bot - 3) { p.y = bot; p.vy = 0; }
+                else if (g < 0 && py + s <= top + 3) { p.y = top - s; p.vy = 0; }
+              }
+            }
+          }
+        }
+      }
+      if (p.y + s >= GY) {
+        p.y = GY - s; p.vy = 0;
         if (g > 0) p.gr = true;
       } else if (p.y <= CY) {
         p.y = CY; p.vy = 0;
         if (g < 0) p.gr = true;
       }
-      if (p.gr) p.ang = 0; else p.ang = p.ang + 9 * DT;
-      c0 = Math.floor(p.x / 8); c1 = Math.floor((p.x + S - 1) / 8);
-      r0 = rowOf(p.y + S - 1); r1 = rowOf(p.y);
+      c0 = Math.floor(p.x / 8); c1 = Math.floor((p.x + s - 1) / 8);
+      r0 = rowOf(p.y + s - 1); r1 = rowOf(p.y);
       for (c = c0; c <= c1; c++) {
         for (r = r0; r <= r1; r++) {
-          t = tile(c, r);
-          var sd = solid(t, r);
+          var t = tile(c, r);
+          sb = solid(t, r);
           var tp = rowTop(r);
-          if ((sd && hit(p.x, p.y + 1, S, S - 2, c * 8, sd[0], 8, sd[1] - sd[0])) ||
-              (t === 94 && hit(p.x + 1, p.y + 1, S - 2, S - 2, c * 8 + 2, tp + 3, 4, 5)) ||
-              (t === 118 && hit(p.x + 1, p.y + 1, S - 2, S - 2, c * 8 + 2, tp, 4, 5))) {
+          if ((sb && hit(p.x, p.y + 1, s, s - 2, c * 8, sb[0], 8, sb[1] - sb[0])) ||
+              (t === 94 && hit(p.x + 1, p.y + 1, s - 2, s - 2, c * 8 + 2, tp + 3, 4, 5)) ||
+              (t === 118 && hit(p.x + 1, p.y + 1, s - 2, s - 2, c * 8 + 2, tp, 4, 5))) {
             p.dead = true;
             return;
           }
         }
       }
-      if (p.x >= endX) p.won = true;
     }
-    return { tile: tile, step: step, endX: endX, len: len, rows: R };
+    function step(p, press, hold) {
+      hold = !!(hold || press);
+      if (press) { p.buf = BUF; p.buf2 = BUF; }
+      else {
+        if (p.buf > 0) p.buf = p.buf - DT;
+        if (p.buf2 > 0) p.buf2 = p.buf2 - DT;
+      }
+      var cc = Math.floor((p.x + 3) / 8);
+      if (cc !== p.pc) { p.pc = cc; portals(p, cc); }
+      pre(p, hold);
+      if (p.du) { swap(p); pre(p, hold); swap(p); }
+      p.x = p.x + p.spd * DT;
+      post(p, hold);
+      if (p.du && !p.dead) { swap(p); post(p, hold); swap(p); }
+      if (p.x >= endX && !p.dead) p.won = true;
+    }
+    return { tile: tile, step: step, endX: endX, len: len, rows: R, newPlayer: newPlayer };
   }
 
   // ------------------------------------------------------------------
@@ -634,7 +825,7 @@ var GD = (function () {
   }
 
   // ------------------------------------------------------------------
-  // Level length: steps for the cube to reach the end. Speed only depends
+  // Level length: steps for the icon to reach the end. Speed only depends
   // on x (portals cover whole columns), so this is exact for any run.
   // ------------------------------------------------------------------
   function levelTiming(rows) {
@@ -643,131 +834,219 @@ var GD = (function () {
       var cc = Math.floor((x + 3) / 8);
       for (var r = 0; r <= 5; r++) {
         var t = L.tile(cc, r);
-        if (t >= 49 && t <= 52) { spd = 50 + 20 * (t - 48); used[spd] = true; }
+        if (t >= 48 && t <= 52) { spd = 50 + 20 * (t - 48); used[spd] = true; }
       }
       x += spd * DT; steps++;
     }
     var at = {};
-    [70, 90, 110, 130].forEach(function (v) { at[v] = L.endX / v; });
+    [50, 70, 90, 110, 130].forEach(function (v) { at[v] = L.endX / v; });
     return { cols: L.len, endX: L.endX, steps: steps, seconds: steps * DT,
       speeds: Object.keys(used).map(Number).sort(function (a, b) { return a - b; }), atSpeed: at };
   }
 
   // ------------------------------------------------------------------
-  // Solver: port of tools/gdash/solve.js (its Lua BFS + press windows)
+  // Input = hold intervals. {s, e}: SA held from step s up to step e-1
+  // (steps are 1-based physics steps). A tap is {s, e: s + 1}. Step k gets
+  // hold = some interval covers k, press = hold now and not at step k-1.
   // ------------------------------------------------------------------
-  function since(p) { return p._since === undefined ? 99 : p._since; }
-  function makeKey(minGap) {
-    return function (p) {
-      return p.y.toFixed(1) + "|" + p.vy.toFixed(1) + "|" + p.g + "|" + p.ufo + "|" + p.orb + "|" + p.pad + "|" +
-        (p.buf > 0 ? p.buf : 0).toFixed(2) + "|" + p.gr + "|" + Math.min(since(p), minGap);
-    };
+  function holdBits(iv, n) {
+    var h = new Uint8Array(n + 2);
+    (iv || []).forEach(function (q) {
+      var s = typeof q === "number" ? q : q.s, e = typeof q === "number" ? q + 1 : q.e;
+      for (var k = Math.max(1, s); k < e && k <= n + 1; k++) h[k] = 1;
+    });
+    return h;
+  }
+  // run an input through the physics; trace = [x, y, vy, g, m, dead] after every step
+  function replay(rows, iv, maxSteps) {
+    var L = makeLevel(rows), p = newPlayer(), trace = [[p.x, p.y]];
+    maxSteps = maxSteps || 30000;
+    var h = holdBits(iv, maxSteps), full = [], used = {};
+    function use(key) { if (key >= 0) { var t = L.tile(Math.floor(key / 8), key % 8); used[String.fromCharCode(t)] = (used[String.fromCharCode(t)] || 0) + 1; } }
+    for (var k = 1; k <= maxSteps; k++) {
+      var hold = h[k] === 1, press = hold && h[k - 1] !== 1, o = [p.orb, p.pad, p.orb2, p.pad2, p.pc];
+      L.step(p, press, hold);
+      if (p.orb !== o[0]) use(p.orb);
+      if (p.pad !== o[1]) use(p.pad);
+      if (p.du && p.orb2 !== o[2]) use(p.orb2);
+      if (p.du && p.pad2 !== o[3]) use(p.pad2);
+      if (p.pc !== o[4]) for (var r = 0; r < 6; r++) { var ch = String.fromCharCode(L.tile(p.pc, r)); if (PORTAL_CHARS.indexOf(ch) >= 0) used[ch] = (used[ch] || 0) + 1; }
+      if (p.da || p.da2) used.dash = (used.dash || 0) + 1;
+      trace.push([p.x, p.y]);
+      full.push([p.x, p.y, p.vy, p.g, p.m, p.mi ? 1 : 0, p.du ? 1 : 0, p.y2, p.dead ? 1 : 0, p.won ? 1 : 0]);
+      if (p.dead || p.won) break;
+    }
+    return { used: used, won: p.won, dead: p.dead, steps: Math.min(k, maxSteps), x: p.x, y: p.y, pct: Math.max(0, Math.min(100, Math.floor(p.x * 100 / L.endX))), trace: trace, full: full, p: p };
+  }
+
+  // ------------------------------------------------------------------
+  // Solver (tools/gdash/solve.js uses this same code). Breadth-first over
+  // the 20 ms steps; at every step a state either keeps its hold state or
+  // changes it: a new press needs >= minGap steps since the last press
+  // (and no press still buffered), a release needs >= minHold steps of
+  // holding. States are merged by their physics state; when more than
+  // `cap` remain they are thinned by a coarse key (1 px, 10 px/s), so
+  // different heights survive rather than near-copies.
+  // ------------------------------------------------------------------
+  function f1(v) { return Math.round(v * 10); }
+  function pkey(p) {
+    var k = f1(p.y) + "|" + f1(p.vy) + "|" + p.g + "|" + (p.gr ? 1 : 0) + "|" + p.orb + "|" + p.pad + "|" +
+      Math.round((p.buf > 0 ? p.buf : 0) * 100) + "|" + Math.round(p.rt * 100) + "|" + (p.da ? 1 : 0);
+    if (p.du) k += "|" + f1(p.y2) + "|" + f1(p.vy2) + "|" + p.g2 + "|" + (p.gr2 ? 1 : 0) + "|" + p.orb2 + "|" + p.pad2 + "|" +
+      Math.round((p.buf2 > 0 ? p.buf2 : 0) * 100) + "|" + Math.round(p.rt2 * 100) + "|" + (p.da2 ? 1 : 0);
+    return k;
+  }
+  function ckey(st) {
+    var p = st.p;
+    return Math.round(p.y) + "|" + Math.round(p.vy / 10) + "|" + p.g + "|" + (st.hd ? 1 : 0) + "|" + (p.da ? 1 : 0) + "|" + Math.round(p.rt * 50) +
+      (p.du ? "|" + Math.round(p.y2) + "|" + p.g2 : "");
+  }
+  // expand one search state; out(newState, press, release). A new press needs
+  // MINGAP steps since the last press and MINREL steps released (st.rl).
+  function expand(L, st, step, MINGAP, MINHOLD, MINREL, out) {
+    // releasing / not pressing first: among equal states the one holding less is kept
+    var opts = st.hd ? [st.hl >= MINHOLD ? false : null, true] : [false, (st.sn >= MINGAP && st.rl >= MINREL && st.p.buf <= 0) ? true : null];
+    for (var i = 0; i < 2; i++) {
+      var hold = opts[i];
+      if (hold === null) continue;
+      var press = hold && !st.hd, p = clone(st.p);
+      L.step(p, press, hold);
+      out({ p: p, hd: hold, sn: press ? 1 : Math.min(st.sn + 1, 99), hl: hold ? (press ? 1 : st.hl + 1) : 0, rl: hold ? 0 : Math.min(st.rl + 1, 99), h: st.h },
+        press, !hold && st.hd, step);
+    }
+  }
+  function thin(nxt, cap) {
+    if (nxt.length <= cap) return nxt;
+    var seen = new Set(), t = [];
+    for (var i = 0; i < nxt.length; i++) { var k = ckey(nxt[i]); if (!seen.has(k)) { seen.add(k); t.push(nxt[i]); } }
+    if (t.length <= cap) return t;
+    var o = [], stp = t.length / cap;
+    for (var j = 0; j < cap; j++) o.push(t[Math.floor(j * stp)]);
+    return o;
   }
   function* solveGen(rows, opts) {
     opts = opts || {};
-    var MINGAP = opts.minGap || 5, CAP = opts.cap || 3000, NOWIN = !!opts.noWindows;
-    var L = makeLevel(rows), key = makeKey(MINGAP);
-    var front = [{ p: newPlayer(), h: null }];
+    var MINGAP = opts.minGap || 5, MINHOLD = opts.minHold || 1, MINREL = opts.minRelease || 3, CAP = opts.cap || 3000, NOWIN = !!opts.noWindows;
+    var HOR = opts.horizon || 100, SCAP = opts.surviveCap || 200;
+    var L = makeLevel(rows);
+    var front = [{ p: newPlayer(), hd: false, sn: 99, hl: 0, rl: 99, h: null }];
     var step = 0, lastx = 0, peak = 0, found = null, t0 = Date.now();
-    search:
-    while (step < 30000) {
+    while (step < 30000 && !found) {
       step++;
       var nxt = [], seen = new Set();
-      for (var si = 0; si < front.length; si++) {
-        var s = front[si];
-        for (var pi = 0; pi <= 1; pi++) {
-          var press = pi === 1;
-          if (!press || (s.p.buf <= 0 && since(s.p) >= MINGAP)) {
-            var p = clone(s.p);
-            L.step(p, press);
-            p._since = press ? 1 : since(s.p) + 1;
-            var h = s.h;
-            if (press) h = { s: step, n: s.h, x: s.p.x };
-            if (p.won) { found = { h: h, n: step }; break search; }
-            if (!p.dead) {
-              lastx = p.x;
-              var k = key(p);
-              if (!seen.has(k)) { seen.add(k); nxt.push({ p: p, h: h }); }
-            }
-          }
-        }
+      for (var si = 0; si < front.length && !found; si++) {
+        expand(L, front[si], step, MINGAP, MINHOLD, MINREL, function (ns, press, release, k) {
+          if (found) return;
+          if (press) ns.h = { s: k, t: 1, n: ns.h, x: ns.p.x };
+          else if (release) ns.h = { s: k, t: 0, n: ns.h, x: ns.p.x };
+          if (ns.p.won) { found = { h: ns.h, n: k, hd: ns.hd }; return; }
+          if (ns.p.dead) return;
+          lastx = ns.p.x;
+          var key = pkey(ns.p) + "|" + (ns.hd ? 1 : 0) + "|" + Math.min(ns.sn, MINGAP) + "|" + (ns.hd ? Math.min(ns.hl, MINHOLD) : Math.min(ns.rl, MINREL));
+          if (!seen.has(key)) { seen.add(key); nxt.push(ns); }
+        });
       }
+      if (found) break;
       if (nxt.length > peak) peak = nxt.length;
       if (nxt.length === 0) {
         return { ok: false, reason: "stuck", col: Math.floor(lastx / 8), x: lastx, step: step, peak: peak,
           text: "STUCK at column " + Math.floor(lastx / 8) + " (x=" + Math.floor(lastx) + ")" };
       }
-      if (nxt.length > CAP) nxt.length = CAP;
-      front = nxt;
-      if (step % 20 === 0) yield { phase: "search", step: step, x: lastx, endX: L.endX, states: nxt.length };
+      front = thin(nxt, CAP);
+      if (step % 20 === 0) yield { phase: "search", step: step, x: lastx, endX: L.endX, states: front.length };
     }
     if (!found) return { ok: false, reason: "timeout", step: step, peak: peak, text: "no win within 30000 steps" };
-    var list = [], XS = {}, hh = found.h;
-    while (hh) { list.push(hh.s); XS[hh.s] = hh.x; hh = hh.n; }
-    var presses = list.reverse();
+    // events -> intervals
+    var ev = [], hh = found.h;
+    while (hh) { ev.push(hh); hh = hh.n; }
+    ev.reverse();
+    var iv = [];
+    for (var i = 0; i < ev.length; i++) {
+      if (ev[i].t === 1) iv.push({ s: ev[i].s, e: found.n + 1, x: ev[i].x });
+      else if (iv.length) iv[iv.length - 1].e = ev[i].s;
+    }
     var n = found.n;
+    // the solved run, state before every step
+    var bits = holdBits(iv, n), path = [], pp = newPlayer();
+    for (var k = 1; k <= n; k++) { path.push(clone(pp)); L.step(pp, bits[k] === 1 && bits[k - 1] !== 1, bits[k] === 1); }
 
-    // BFS from state p0: can some input sequence stay alive for 'hor' steps (or win)?
-    function survive(p0, hor) {
-      var fr = [p0];
-      for (var st = 1; st <= hor; st++) {
-        var nx = [], sn = new Set();
-        for (var i = 0; i < fr.length; i++) {
-          var s = fr[i];
-          for (var pi = 0; pi <= 1; pi++) {
-            if (pi === 0 || (s.buf <= 0 && since(s) >= MINGAP)) {
-              var p = clone(s);
-              L.step(p, pi === 1);
-              p._since = pi === 1 ? 1 : since(s) + 1;
-              if (p.won) return true;
-              if (!p.dead) { var k = key(p); if (!sn.has(k)) { sn.add(k); nx.push(p); } }
-            }
-          }
+    // BFS from a search state: can some input stay alive for HOR steps (or win)?
+    function survive(st0) {
+      var fr = [st0];
+      for (var s2 = 1; s2 <= HOR; s2++) {
+        var nx = [], sn = new Set(), win = false;
+        for (var i2 = 0; i2 < fr.length && !win; i2++) {
+          expand(L, fr[i2], s2, MINGAP, MINHOLD, MINREL, function (ns) {
+            if (ns.p.won) { win = true; return; }
+            if (ns.p.dead) return;
+            var key = pkey(ns.p) + "|" + (ns.hd ? 1 : 0) + "|" + Math.min(ns.sn, MINGAP) + "|" + (ns.hd ? Math.min(ns.hl, MINHOLD) : Math.min(ns.rl, MINREL));
+            if (!sn.has(key)) { sn.add(key); nx.push(ns); }
+          });
         }
+        if (win) return true;
         if (nx.length === 0) return false;
-        if (nx.length > 80) nx.length = 80;
-        fr = nx;
+        fr = thin(nx, SCAP);
       }
       return true;
     }
-    // press j moved to s1 (later presses dropped): alive and able to go on for 2 s?
-    function shiftOk(j, s1) {
-      var p = newPlayer(), set = {};
-      for (var i = 0; i < j; i++) set[presses[i]] = true;
-      set[s1] = true;
-      for (var k = 1; k <= s1; k++) {
-        L.step(p, set[k] === true);
+    // interval j changed to [s1, e1): earlier input unchanged, later input dropped;
+    // must survive the change and then HOR more steps with free input
+    function shiftOk(j, s1, e1) {
+      var from = Math.min(s1, iv[j].s) - 1, p = clone(path[from]);
+      for (var k2 = from + 1; k2 <= e1; k2++) {
+        var hold = k2 >= s1 && k2 < e1, prev = k2 - 1 >= s1 && k2 - 1 < e1;
+        if (k2 - 1 < s1 && k2 - 1 === from) prev = bits[from] === 1;
+        L.step(p, hold && !prev, hold);
         if (p.dead) return false;
         if (p.won) return true;
       }
-      p._since = 1;
-      return survive(p, 100);
+      return survive({ p: p, hd: false, sn: Math.min(e1 - s1 + 1, 99), hl: 0, rl: 1, h: null });
     }
-    var W = [], minW = 999, minAt = -1, sumW = 0;
-    for (var j = 0; j < (NOWIN ? 0 : presses.length); j++) {
-      var s0 = presses[j], lo = 0, hi = 0;
+    var minW = 999, minAt = -1, sumW = 0, minR = 999, minRAt = -1;
+    for (var j = 0; j < (NOWIN ? 0 : iv.length); j++) {
+      var q = iv[j], tap = q.e - q.s === 1, lo = 0, hi = 0, prevE = j > 0 ? iv[j - 1].e : 0, prevS = j > 0 ? iv[j - 1].s : -99,
+        nextS = j + 1 < iv.length ? iv[j + 1].s : 1e9;
       for (var dir = -1; dir <= 1; dir += 2) {
         for (var d = 1; d <= 5; d++) {
-          var s1 = s0 + dir * d;
-          if (s1 < 1 || (j > 0 && s1 - presses[j - 1] < MINGAP) || (j + 1 < presses.length && presses[j + 1] - s1 < MINGAP)) break;
-          if (!shiftOk(j, s1)) break;
+          var s1 = q.s + dir * d, e1 = tap ? q.e + dir * d : q.e;
+          if (s1 < 1 || s1 - prevE < MINREL || s1 - prevS < MINGAP || s1 >= e1 || nextS - e1 < MINREL || nextS - s1 < MINGAP) break;
+          if (!shiftOk(j, s1, e1)) break;
           if (dir < 0) lo = d; else hi = d;
         }
       }
-      var w = lo + hi + 1;
-      W[j] = { w: w, lo: lo, hi: hi };
-      sumW += w;
-      if (w < minW) { minW = w; minAt = s0; }
-      if (j % 2 === 0) yield { phase: "windows", done: j, of: presses.length };
+      q.w = lo + hi + 1; q.lo = lo; q.hi = hi;
+      sumW += q.w;
+      if (q.w < minW) { minW = q.w; minAt = q.s; }
+      // release window (holds only): move the release, keep the press
+      q.rw = null;
+      if (!tap && q.e <= n) {
+        var rlo = 0, rhi = 0;
+        for (var dir2 = -1; dir2 <= 1; dir2 += 2) {
+          for (var d2 = 1; d2 <= 5; d2++) {
+            var e2 = q.e + dir2 * d2;
+            if (e2 - q.s < MINHOLD || e2 <= q.s || nextS - e2 < MINREL) break;
+            if (!shiftOk(j, q.s, e2)) break;
+            if (dir2 < 0) rlo = d2; else rhi = d2;
+          }
+        }
+        q.rw = rlo + rhi + 1; q.rlo = rlo; q.rhi = rhi;
+        if (q.rw < minR) { minR = q.rw; minRAt = q.e; }
+      }
+      if (j % 2 === 0) yield { phase: "windows", done: j, of: iv.length };
     }
+    var nh = iv.filter(function (q2) { return q2.e - q2.s > 1; }).length;
     return {
       ok: true, steps: n, seconds: n * DT, peak: peak, ms: Date.now() - t0,
-      presses: presses.map(function (s, i) {
-        return { s: s, x: XS[s], col: Math.floor(XS[s] / 8), w: W[i] ? W[i].w : null, lo: W[i] ? W[i].lo : null, hi: W[i] ? W[i].hi : null };
+      presses: iv.map(function (q2) {
+        return { s: q2.s, e: q2.e, x: q2.x, col: Math.floor(q2.x / 8), w: q2.w == null ? null : q2.w, lo: q2.lo, hi: q2.hi,
+          rw: q2.rw, rlo: q2.rlo, rhi: q2.rhi };
       }),
-      minW: NOWIN ? null : minW, minAt: minAt, avgW: presses.length ? sumW / presses.length : 0,
-      text: "SOLVED " + n + " steps (" + (n * DT).toFixed(1) + "s), " + presses.length + " presses" +
-        (NOWIN ? "" : ", press window min " + minW + " steps (=" + minW * 20 + "ms, at " + (minAt * DT).toFixed(1) + "s) avg " + (sumW / Math.max(1, presses.length)).toFixed(1) + " steps")
+      minW: NOWIN ? null : minW, minAt: minAt, avgW: iv.length ? sumW / iv.length : 0,
+      minR: minR === 999 ? null : minR, minRAt: minRAt,
+      text: "SOLVED " + n + " steps (" + (n * DT).toFixed(1) + "s), " + iv.length + " presses (" + nh + " holds)" +
+        (NOWIN ? "" : ", press window min " + minW + " steps (=" + minW * 20 + "ms, at " + (minAt * DT).toFixed(1) + "s) avg " +
+          (sumW / Math.max(1, iv.length)).toFixed(1) + " steps" +
+          (minR !== 999 ? ", release window min " + minR + " steps (=" + minR * 20 + "ms, at " + (minRAt * DT).toFixed(1) + "s)" : ""))
     };
   }
   function solveLevel(rows, opts) {
@@ -775,25 +1054,14 @@ var GD = (function () {
     do { r = g.next(); } while (!r.done);
     return r.value;
   }
-  // run a press list (step numbers, 1-based) through the physics
-  function replay(rows, presses, maxSteps) {
-    var L = makeLevel(rows), p = newPlayer(), set = {}, trace = [[p.x, p.y]];
-    (presses || []).forEach(function (s) { set[s] = true; });
-    maxSteps = maxSteps || 30000;
-    for (var k = 1; k <= maxSteps; k++) {
-      L.step(p, set[k] === true);
-      trace.push([p.x, p.y]);
-      if (p.dead || p.won) break;
-    }
-    return { won: p.won, dead: p.dead, steps: k, x: p.x, y: p.y, pct: Math.max(0, Math.min(100, Math.floor(p.x * 100 / L.endX))), trace: trace };
-  }
 
   return {
-    GY: GY, CY: CY, S: S, DT: DT, PX: PX, TILES: TILES, TILE_CHARS: TILE_CHARS,
+    GY: GY, CY: CY, S: S, DT: DT, PX: PX, TILES: TILES, TILE_CHARS: TILE_CHARS, PORTAL_CHARS: PORTAL_CHARS, MODES: MODES,
     parseLevel: parseLevel, parseHeader: parseHeader, exportLevel: exportLevel, luaQuote: luaQuote,
+    encodeRow: encodeRow, decodeRow: decodeRow,
     makeLevel: makeLevel, newPlayer: newPlayer, rowTop: rowTop, clone: clone,
     tok: tok, tuneTokens: tuneTokens, makeMusic: makeMusic, levelTiming: levelTiming,
-    solveGen: solveGen, solveLevel: solveLevel, replay: replay
+    solveGen: solveGen, solveLevel: solveLevel, replay: replay, holdBits: holdBits
   };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = GD;
@@ -819,7 +1087,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101", Y: "101101010010010",
     Z: "111001010100111", g: "011101011001110", "%": "101001010100101", "<": "001010100010001", ">": "100010001010100",
     "/": "001001010100100", "!": "010010010000010", ":": "000010000010000", ".": "000000000000010", "-": "000000111000000",
-    "?": "110001010000010", "#": "101111101111101", " ": "000000000000000"
+    "?": "110001010000010", "#": "101111101111101", " ": "000000000000000",
+    m: "000111111101101", n: "000110101101101", d: "001001011101011", t: "010111010010011", "=": "000111000111000", "^": "010101000000000", "~": "000011110000000"
   };
   function Lcd(w, h) { this.w = w; this.h = h; this.px = new Uint8Array(w * h); }
   Lcd.prototype.clear = function () { this.px.fill(0); };
@@ -874,44 +1143,78 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     ctx.drawImage(offCanvas, dx, dy, this.w * scale, this.h * scale);
   };
 
-  // port of drawTile() from Game-GeometryDash.lua
+  // ---- port of GDASH/draw.lua: shapes are strings of 8 lines "x1y1x2y2" ----
+  var TS = "oirqebahpkfuwt^v";
+  var SH = "11616166661616113333333333333333" + "22525255552525222522252225222522" +
+    "11616166661616113343344434443444" + "22522353245425552555255525552555" +
+    "11616166661616112255255225522552" + "11611262136314641565166616661666" +
+    "11616166661616112353425344534453" + "11616166661616112353425344532224" +
+    "16661767176717671767176717671767" + "27572757275727572757275727572757" +
+    "15651666176717671767176717671767" + "15651767151765676567656765676567" +
+    "17672537554755475547554755475547" + "10176067334333433343334333433343" +
+    "07313167175717571757175717571757" + "00363660105010501050105010501050";
+  var IC = "00606066660606002242234324442444" + "30636336360303302343323432343234" +
+    "03636366660606032040202340434043" + "03636366660606032040202340434043" +
+    "06660206026510201121112111211121" + "06660206026510201121112111211121" +
+    "20404063634646262603032011551155" + "20404063634646262603032015511551" +
+    "03606036360336033603360336033603" + "03606036360336033603360336033603" +
+    "10505053531313103141241644564456" + "10505053531313103141242644464446" +
+    "10501151125212062326434652665266" + "10501151125212062326434652665266" +
+    "00600666303234362242234324442444" + "00600666303234362242234324442444" +
+    "00663036066003636666000030366006";
+  // i = 0-based offset of the 32-char shape; fl = flip (s-1) or null
+  function shape(lcd, S, i, x, y, k, fl) {
+    for (var j = i; j <= i + 28; j += 4) {
+      var a = Math.floor((S.charCodeAt(j) - 48) * k + 0.5), b = Math.floor((S.charCodeAt(j + 1) - 48) * k + 0.5);
+      var c = Math.floor((S.charCodeAt(j + 2) - 48) * k + 0.5), d = Math.floor((S.charCodeAt(j + 3) - 48) * k + 0.5);
+      if (fl != null) { b = fl - b; d = fl - d; }
+      lcd.line(x + a, y + b, x + c, y + d);
+    }
+  }
   function drawTile(lcd, t, sx, r, clipW) {
-    var top = GD.rowTop(r), b = top + 8;
+    var top = GD.rowTop(r);
     if (t === 35 || t === 61) {
       var h = t === 61 ? 4 : 8, x0 = Math.max(sx, 0), x1 = Math.min(sx + 8, clipW);
       if (x1 - x0 > 1) lcd.rect(x0, top, x1 - x0, h);
       if (t === 35 && sx >= 0 && sx <= clipW - 8) lcd.set(sx + 3, top + 3);
-    } else if (sx < 0 || sx > clipW - 8) {
+    } else if (sx < 0 || sx > clipW - 8 || t === 46) {
       return;
-    } else if (t === 94) {
-      lcd.line(sx, b - 1, sx + 3, b - 7); lcd.line(sx + 3, b - 7, sx + 6, b - 1); lcd.line(sx + 1, b - 1, sx + 5, b - 1);
-    } else if (t === 118) {
-      lcd.line(sx, top, sx + 3, top + 6); lcd.line(sx + 3, top + 6, sx + 6, top); lcd.line(sx + 1, top, sx + 5, top);
-    } else if (t === 111) {
-      lcd.rect(sx + 1, top + 1, 6, 6); lcd.set(sx + 3, top + 3);
-    } else if (t === 113) {
-      lcd.fill(sx + 2, top + 2, 4, 4);
-    } else if (t === 112) {
-      lcd.fill(sx + 1, b - 2, 6, 2);
-    } else if (t === 71 || t === 103 || t === 85 || t === 67 || (t >= 49 && t <= 52)) {
-      lcd.rect(sx + 1, CY, 5, GY - CY);
-      lcd.text(sx + 2, top + 2, String.fromCharCode(t));
-    } else if (t !== 46) {
-      lcd.text(sx + 2, top + 2, "?");
+    } else {
+      var ch = String.fromCharCode(t), i = TS.indexOf(ch);
+      if (i >= 0) shape(lcd, SH, i * 32, sx, top, 1, null);
+      else if (GD.PORTAL_CHARS.indexOf(ch) >= 0) { lcd.rect(sx + 1, CY, 5, GY - CY); lcd.text(sx + 2, top + 2, ch); }
+      else lcd.text(sx + 2, top + 2, "?");
     }
   }
-  // ground, ceiling, hatching for world camera 'cam' on an lcd of any width
-  function drawBackdrop(lcd, cam) {
+  // ground, ceiling (solid in flying modes), hatching for world camera 'cam' on an lcd of any width
+  function drawBackdrop(lcd, cam, fly) {
     lcd.line(0, GY, lcd.w - 1, GY);
-    lcd.line(0, CY - 1, lcd.w - 1, CY - 1, true);
+    lcd.line(0, CY - 1, lcd.w - 1, CY - 1, !fly);
     var off = ((cam % 16) + 16) % 16;
     for (var gx = -off; gx < lcd.w; gx += 16) if (gx >= 0 && gx + 3 < lcd.w) lcd.line(gx, GY + 1, gx + 3, lcd.h - 1);
   }
-  // port of drawWorld()/drawPlayer() for a 128x64 screen
+  // one icon; T = wave trail store {x: [], y: []} or null, o = 0 main / 8 dual
+  function drawIcon(lcd, P, y, g, vy, gr, still, o, T, cam) {
+    var m = P.m, s = P.mi ? 5 : 7, f = 0, fl = g < 0 ? s - 1 : null, i;
+    y = Math.floor(y);
+    if (m === 4) {
+      if (T) {
+        for (i = o + 8; i >= o + 2; i--) { T.x[i] = T.x[i - 1]; T.y[i] = T.y[i - 1]; }
+        T.x[o + 1] = P.x; T.y[o + 1] = y + Math.floor(s / 2);
+        for (i = o + 1; i <= o + 7; i++) if (T.x[i + 1] != null && T.x[i + 1] - cam >= 0) lcd.line(Math.floor(T.x[i] - cam), T.y[i], Math.floor(T.x[i + 1] - cam), T.y[i + 1]);
+      }
+      fl = vy > 0 ? s - 1 : null;
+    } else {
+      if (T) for (i = o + 1; i <= o + 8; i++) T.x[i] = null;
+      if ((m === 0 && !still && !gr) || m === 3 || m === 5) f = Math.floor(P.x / 12) % 2;
+    }
+    shape(lcd, IC, (m * 2 + f) * 32, PX, y, (s - 1) / 6, fl);
+  }
+  // port of the draw function in GDASH/draw.lua for a 128x64 screen
   function drawWorld(lcd, L, P, o) {
     lcd.clear();
-    var cam = Math.floor(P.x) - PX;
-    drawBackdrop(lcd, cam);
+    var cam = Math.floor(P.x) - PX, m = P.m;
+    drawBackdrop(lcd, cam, m === 1 || m === 2 || m === 4 || m === 7);
     var c0 = Math.floor(cam / 8);
     for (var c = c0; c <= c0 + 16; c++) for (var r = 0; r < 6; r++) {
       var t = L.tile(c, r);
@@ -921,20 +1224,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (ex >= 0 && ex < 128) lcd.line(ex, CY, ex, GY - 1, true);
     var ax = 40 - cam;
     if (o.attempt != null && ax > 0 && ax < 128 - 60) lcd.text(ax, 24, "Attempt " + o.attempt);
-    var y = Math.floor(P.y);
     if (o.dead) {
-      var cx = PX + 3, cy = y + 3, d = Math.floor(o.deadT * 40) + 2;
-      if (cy - d < 0) d = cy;
-      lcd.line(cx - d, cy, cx + d, cy); lcd.line(cx, cy - d, cx, cy + d);
-      lcd.line(cx - d, cy - d, cx + d, cy + d); lcd.line(cx - d, cy + d, cx + d, cy - d);
-    } else if (P.ufo) {
-      lcd.rect(PX, y + 3, S, 4); lcd.rect(PX + 2, y, 3, 4);
-    } else if (P.gr || !o.playing) {
-      lcd.rect(PX, y, S, S); lcd.fill(PX + 2, y + 2, 3, 3);
+      var d = Math.min(13, Math.floor(o.deadT * 40) + 2);
+      shape(lcd, IC, 16 * 32, PX + 3 - d, Math.floor(P.y) + 3 - d, d / 3, null);
+      if (P.du) shape(lcd, IC, 16 * 32, PX + 3 - d, Math.floor(P.y2) + 3 - d, d / 3, null);
     } else {
-      var cs = Math.cos(P.ang) * 4.5, sn = Math.sin(P.ang) * 4.5, ccx = PX + 3.5, ccy = P.y + 3.5;
-      var pts = [[ccx + cs, ccy + sn], [ccx - sn, ccy + cs], [ccx - cs, ccy - sn], [ccx + sn, ccy - cs]].map(function (q) { return [Math.floor(q[0]), Math.floor(q[1])]; });
-      for (var i = 0; i < 4; i++) lcd.line(pts[i][0], pts[i][1], pts[(i + 1) % 4][0], pts[(i + 1) % 4][1]);
+      var still = !o.playing;
+      drawIcon(lcd, P, P.y, P.g, P.vy, P.gr, still, 0, o.trail, cam);
+      if (P.du) drawIcon(lcd, P, P.y2, P.g2, P.vy2, P.gr2, still, 8, o.trail, cam);
     }
     if (o.hud) {
       lcd.text(1, 1, o.hudLeft);
@@ -954,7 +1251,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
 
   function blankCells(W) { var c = []; for (var r = 0; r < 6; r++) { c.push(new Array(W).fill(".")); } return c; }
   function rowsOf(d) { d = d || doc; return d.cells.map(function (a) { return a.join(""); }); }
-  function exportText() { return GD.exportLevel({ n: doc.n, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }); }
+  function exportText() { return GD.exportLevel({ n: doc.n, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }, { plain: !!($("fPlain") && $("fPlain").checked) }); }
   function snapshot() { return JSON.stringify({ n: doc.n, name: doc.name, diff: doc.diff, W: doc.W, rows: rowsOf(), u: doc.u, m: doc.m }); }
   function restore(s) {
     var o = JSON.parse(s);
@@ -969,7 +1266,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (W < 1) W = 1;
     doc = { n: n || lv.n || 9, name: lv.name || "", diff: lv.diff || "", W: W, u: lv.u == null ? "0.1" : lv.u, m: lv.m == null ? "" : lv.m,
       cells: lv.rows.map(function (r) { var a = r.split(""); while (a.length < W) a.push("."); return a; }) };
-    undoStack = []; redoStack = []; sel = null; deaths = []; solveRes = null; mSel = -1;
+    undoStack = []; redoStack = []; sel = null; deaths = []; solveRes = null; rsel = [];
     $("scroller").scrollLeft = 0;
     changed(true);
   }
@@ -1019,9 +1316,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function updateStats() {
     var tm = GD.levelTiming(rowsOf());
     var bytes = exportText().length;
-    var spd = tm.speeds.map(function (v) { return { 70: 1, 90: 2, 110: 3, 130: 4 }[v]; }).join(", ");
+    var spd = tm.speeds.map(function (v) { return (v - 50) / 20; }).join(", ");
     $("stats").innerHTML = tm.cols + " columns &middot; end x = " + tm.endX + " px &middot; run <b>" + tm.seconds.toFixed(1) + " s</b> (speeds used: " + spd + ") &middot; " +
-      "at constant speed 1/2/3/4: " + [70, 90, 110, 130].map(function (v) { return tm.atSpeed[v].toFixed(1); }).join(" / ") + " s &middot; file " + bytes + " B";
+      "at constant speed 0/1/2/3/4: " + [50, 70, 90, 110, 130].map(function (v) { return tm.atSpeed[v].toFixed(1); }).join(" / ") + " s &middot; file " + bytes + " B" +
+      (bytes > 6000 ? " <span class='warn'>(over 6 KB)</span>" : "");
   }
 
   // ---------------- palette ----------------
@@ -1031,7 +1329,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var t = ch.charCodeAt(0);
     // draw in a fake 1-row world shifted so the cell sits at y 1..8
     var tmp = new Lcd(10, 64);
-    if (t >= 49 && t <= 52 || t === 71 || t === 103 || t === 85 || t === 67) {
+    if (GD.PORTAL_CHARS.indexOf(ch) >= 0) {
       tmp.rect(2, GY - 8, 5, 8); tmp.text(3, GY - 7, ch);
     } else if (t !== 46) drawTile(tmp, t, 1, 0, 10);
     for (var y = 0; y < 9; y++) for (var x = 0; x < 10; x++) l.px[(y + 1) * 10 + x] = tmp.px[(GY - 8 + y) * 10 + x];
@@ -1039,8 +1337,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     return cv;
   }
   function buildPalette() {
-    var box = $("tiles");
+    var box = $("tiles"), lastCat = null;
     GD.TILES.forEach(function (t) {
+      if (t.cat !== lastCat) {
+        lastCat = t.cat;
+        var hd = document.createElement("div"); hd.className = "pcat"; hd.textContent = t.cat; box.appendChild(hd);
+      }
       var b = document.createElement("button");
       b.className = "tilebtn"; b.dataset.ch = t.ch; b.title = t.desc + "  (key: " + t.ch + ")";
       b.appendChild(tileIcon(t.ch));
@@ -1131,6 +1433,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
         }
         var tight = +$("fTight").value || 60;
         solveRes.presses.forEach(function (p) {
+          if (p.e - p.s > 1 && solveRes.trace) {
+            var q = solveRes.trace[Math.min(solveRes.trace.length - 1, p.e - 1)];
+            edctx.fillStyle = "#2f7de1"; edctx.fillRect(X(p.x + 3.5), Y(CY) - 3, Math.max(2, X(q[0] + 3.5) - X(p.x + 3.5)), 2);
+          }
           var w = p.w == null ? 99 : p.w * 20;
           edctx.fillStyle = w < tight ? "#e23b3b" : w < tight * 2 ? "#e89a1c" : "#2fae5a";
           var px = X(p.x + 3.5), py = Y(CY) - 2;
@@ -1351,7 +1657,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       document.querySelectorAll("#tabs button").forEach(function (x) { x.classList.toggle("on", x === b); });
       document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("show", p.id === "p-" + activeTab); });
       if (activeTab === "export") updateExport();
-      if (activeTab === "music") { drawRoll(); updateMusicInfo(); }
+      if (activeTab === "music") { drawRoll(); updateMusicInfo(); rollHome(); drawRoll(); }
     };
   });
 
@@ -1371,12 +1677,15 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   }
 
   // ---------------- play-test ----------------
+  // Space / Up / W / mouse button = SA: held while the key/button is down, so ship,
+  // wave, robot and dash orbs work like on the radio. Enter = ENTER (a tap only).
   var pc = $("pc"), pcctx = pc.getContext("2d"), pcLcd = new Lcd(128, 64);
   var play = { running: false };
-  function startPlay(prac, autoPresses) {
+  function startPlay(prac, autoIv) {
     stopMusicPreview();
     var L = GD.makeLevel(rowsOf());
-    play = { running: true, L: L, prac: !!prac, cps: [], attempts: 0, best: 0, auto: autoPresses ? new Set(autoPresses) : null, last: performance.now() };
+    play = { running: true, L: L, prac: !!prac, cps: [], attempts: 0, best: 0, held: false, last: performance.now(),
+      auto: autoIv ? GD.holdBits(autoIv, 30000) : null };
     newAttempt();
     pc.focus();
     requestAnimationFrame(frame);
@@ -1385,6 +1694,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     play.attempts++;
     play.P = play.prac && play.cps.length ? GD.clone(play.cps[play.cps.length - 1]) : GD.newPlayer();
     play.acc = 0; play.pend = false; play.mt = 0; play.state = "play"; play.deadT = 0; play.stepN = 0;
+    play.trail = { x: [], y: [] };
     play.music = $("fPlayMusic").checked ? GD.makeMusic(doc.m || null, doc.u, function (f, ms) { beep(f, ms); }) : null;
     if (play.music) play.music(-1);
   }
@@ -1398,8 +1708,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       play.acc += dt;
       while (play.acc >= 20) {
         play.acc -= 20; play.stepN++;
-        var press = play.pend || (play.auto && play.auto.has(play.stepN));
-        play.L.step(P, press);
+        var press = play.pend, hold = play.held || press;
+        if (play.auto) { hold = play.auto[play.stepN] === 1; press = hold && play.auto[play.stepN - 1] !== 1; }
+        play.L.step(P, press, hold);
         play.mt += 0.02; play.pend = false;
         if (P.dead) {
           play.state = "dead"; play.deadT = 0; beep(250, 300);
@@ -1408,6 +1719,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
           deaths.push({ x: P.x, y: P.y }); if (deaths.length > 12) deaths.shift();
           drawEditor();
           $("playinfo").innerHTML = "<span class='bad'>Died at " + pct + "%</span> &middot; column " + Math.floor((P.x + 3) / 8) + " &middot; " + (play.stepN * 0.02).toFixed(2) + " s into the attempt" +
+            " &middot; mode " + GD.MODES[P.m] + (P.mi ? " (mini)" : "") + (P.du ? " (dual)" : "") +
             "<br>Attempt " + play.attempts + (play.prac ? " (practice, " + play.cps.length + " checkpoints)" : " &middot; best " + play.best + "%");
           break;
         }
@@ -1424,36 +1736,45 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       if (play.deadT > 0.8) { if (play.auto) { play.running = false; } else newAttempt(); }
     }
     drawWorld(pcLcd, play.L, play.P, {
-      playing: play.state === "play", dead: play.state === "dead", deadT: play.deadT, hud: true,
+      playing: play.state === "play", dead: play.state === "dead", deadT: play.deadT, hud: true, trail: play.trail,
       hudLeft: play.prac ? "PRAC" + play.cps.length : "A" + play.attempts, pct: pctOf(play.P), attempt: play.attempts
     });
     if (play.state === "win") { pcLcd.text(14, 16, "LEVEL COMPLETE!", 0x201); pcLcd.text(14, 34, play.prac ? "Practice run" : "Attempts: " + play.attempts); }
     pcLcd.blit(pcctx, 0, 0, 4);
+    $("holdLamp").classList.toggle("on", !!(play.held || (play.auto && play.auto[play.stepN] === 1)));
     if (play.running) requestAnimationFrame(frame);
   }
-  function stopPlay() { play.running = false; }
-  function jump() {
+  function stopPlay() { play.running = false; play.held = false; }
+  // down = SA pressed (held until up); tap = ENTER (one step only)
+  function jump(down, tap) {
     if (!play.running) return;
-    if (play.state === "win") { play.attempts = 0; newAttempt(); return; }
-    play.pend = true;
+    if (play.state === "win") { if (down || tap) { play.attempts = 0; newAttempt(); } return; }
+    if (tap) { play.pend = true; return; }
+    if (down && !play.held) play.pend = true;
+    play.held = !!down;
   }
+  var HOLD_KEYS = { " ": 1, ArrowUp: 1, w: 1, W: 1 };
   function handlePlayKey(e) {
     if (typing(e) && e.target !== pc) return false;
     var k = e.key;
-    if (k === " " || k === "ArrowUp" || k === "w" || k === "W" || k === "Enter") { e.preventDefault(); if (!e.repeat) jump(); return true; }
+    if (HOLD_KEYS[k]) { e.preventDefault(); if (!e.repeat) jump(true); return true; }
+    if (k === "Enter") { e.preventDefault(); if (!e.repeat) jump(false, true); return true; }
     if (k === "Escape") { stopPlay(); return true; }
     if (k === "r" || k === "R") { newAttempt(); return true; }
-    if ((k === "c" || k === "C") && play.prac && play.state === "play" && play.P.gr && play.cps.length < 30) { play.cps.push(GD.clone(play.P)); return true; }
+    if ((k === "c" || k === "C") && play.prac && play.state === "play" && play.cps.length < 15) { play.cps.push(GD.clone(play.P)); return true; }
     if ((k === "x" || k === "X") && play.prac && play.cps.length) { play.cps.pop(); return true; }
     return false;
   }
-  pc.addEventListener("mousedown", function (e) { e.preventDefault(); if (play.running) jump(); else startPlay(false); });
+  window.addEventListener("keyup", function (e) { if (play.running && HOLD_KEYS[e.key]) jump(false); });
+  window.addEventListener("blur", function () { if (play.running) jump(false); });
+  pc.addEventListener("mousedown", function (e) { e.preventDefault(); if (play.running) jump(true); else startPlay(false); });
+  window.addEventListener("mouseup", function () { if (play.running && play.held) jump(false); });
   $("bPlay").onclick = function () { startPlay(false); };
   $("bPrac").onclick = function () { startPlay(true); };
   $("bStop").onclick = stopPlay;
   $("bWatch").onclick = function () {
     if (!solveRes || !solveRes.ok || stale()) { toast("Run Check beatable on the current level first."); return; }
-    startPlay(false, solveRes.presses.map(function (p) { return p.s; }));
+    startPlay(false, solveRes.presses);
   };
 
   // ---------------- solver ----------------
@@ -1461,7 +1782,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   $("bSolve").onclick = function () {
     if (solveJob) return;
     var rows = rowsOf(), sig = rows.join("\n");
-    var gen = GD.solveGen(rows, { minGap: Math.max(1, +$("fGap").value || 5) });
+    var gen = GD.solveGen(rows, { minGap: Math.max(1, +$("fGap").value || 5), minHold: Math.max(1, +$("fHold").value || 1), minRelease: Math.max(1, +$("fRel").value || 3) });
     var t0 = performance.now();
     solveJob = { cancel: false };
     $("bSolve").disabled = true; $("bSolveStop").disabled = false; $("presslist").innerHTML = "";
@@ -1481,7 +1802,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     function finish(res) {
       solveJob = null; $("bSolve").disabled = false; $("bSolveStop").disabled = true;
       if (!res) { $("solveout").textContent = "Cancelled."; return; }
-      if (res.ok) res.trace = GD.replay(rows, res.presses.map(function (p) { return p.s; })).trace;
+      if (res.ok) { var rp = GD.replay(rows, res.presses); res.trace = rp.trace; res.used = rp.used; }
       solveRes = res; solveSig = sig;
       showSolve(performance.now() - t0);
       drawEditor();
@@ -1494,19 +1815,25 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var r = solveRes, tight = +$("fTight").value || 60, out = $("solveout");
     out.className = "note" + (r.ok ? "" : " warn");
     if (!r.ok) {
-      out.innerHTML = "<b class='bad'>NOT BEATABLE</b> (" + r.text + "). No press sequence gets past column " + (r.col != null ? r.col : "?") +
+      out.innerHTML = "<b class='bad'>NOT BEATABLE</b> (" + r.text + "). No input gets past column " + (r.col != null ? r.col : "?") +
         ". The red column in the editor marks where every surviving path ends.";
       $("presslist").innerHTML = ""; return;
     }
-    var nT = r.presses.filter(function (p) { return p.w * 20 < tight; }).length;
-    out.innerHTML = "<b class='ok'>BEATABLE</b> &middot; " + r.steps + " steps (" + r.seconds.toFixed(1) + " s) &middot; " + r.presses.length + " presses &middot; " +
+    var nT = r.presses.filter(function (p) { return p.w * 20 < tight || (p.rw && p.rw * 20 < tight); }).length;
+    var nH = r.presses.filter(function (p) { return p.e - p.s > 1; }).length;
+    out.innerHTML = "<b class='ok'>BEATABLE</b> &middot; " + r.steps + " steps (" + r.seconds.toFixed(1) + " s) &middot; " + r.presses.length + " presses (" + nH + " held) &middot; " +
       "tightest press window <b class='" + (r.minW * 20 < tight ? "bad" : "ok") + "'>" + r.minW * 20 + " ms</b> at " + (r.minAt * 0.02).toFixed(1) + " s, average " + (r.avgW * 20).toFixed(0) + " ms" +
-      " &middot; " + (nT ? "<span class='bad'>" + nT + " press(es) under " + tight + " ms</span>" : "no press under " + tight + " ms") +
+      (r.minR != null ? " &middot; tightest release window <b class='" + (r.minR * 20 < tight ? "bad" : "ok") + "'>" + r.minR * 20 + " ms</b> at " + (r.minRAt * 0.02).toFixed(1) + " s" : "") +
+      " &middot; " + (nT ? "<span class='bad'>" + nT + " input(s) under " + tight + " ms</span>" : "nothing under " + tight + " ms") +
       (ms ? " &middot; took " + (ms / 1000).toFixed(1) + " s" : "") +
-      "<br><span style='color:var(--dim)'>Window = how many 20 ms steps earlier/later (up to &plusmn;5) the press still works. This is one route; another route may be easier. Triangles above the editor mark the presses (red = tight). Click a row to scroll there.</span>";
-    var html = "<table class='list'><tr><th>#</th><th>time</th><th>column</th><th>window</th><th>early / late</th></tr>";
+      (r.used ? "<br>Used on this route: " + Object.keys(r.used).sort().map(function (k) { return k === "dash" ? "dash " + (r.used[k] * 20) + " ms" : "<code>" + k + "</code>&times;" + r.used[k]; }).join(" ") : "") +
+      "<br><span style='color:var(--dim)'>Window = how many 20 ms steps earlier/later (up to &plusmn;5) the press (or, for a hold, the release) still works. On the radio SA/SD are read once per frame (20-80 ms), so holds are only as exact as a frame. This is one route; another may be easier. Triangles above the editor mark the presses (red = tight), bars show holds. Click a row to scroll there.</span>";
+    var html = "<table class='list'><tr><th>#</th><th>time</th><th>column</th><th>held</th><th>press window</th><th>early / late</th><th>release window</th></tr>";
     r.presses.forEach(function (p, i) {
-      html += "<tr data-col='" + p.col + "' class='" + (p.w * 20 < tight ? "tight" : "") + "'><td>" + (i + 1) + "</td><td>" + (p.s * 0.02).toFixed(2) + " s</td><td>" + p.col + "</td><td>" + p.w * 20 + " ms</td><td>-" + p.lo * 20 + " / +" + p.hi * 20 + " ms</td></tr>";
+      var held = p.e - p.s > 1, bad = p.w * 20 < tight || (p.rw && p.rw * 20 < tight);
+      html += "<tr data-col='" + p.col + "' class='" + (bad ? "tight" : "") + "'><td>" + (i + 1) + "</td><td>" + (p.s * 0.02).toFixed(2) + " s</td><td>" + p.col + "</td><td>" +
+        (held ? ((p.e - p.s) * 20) + " ms" : "tap") + "</td><td>" + p.w * 20 + " ms</td><td>-" + p.lo * 20 + " / +" + p.hi * 20 + " ms</td><td>" +
+        (p.rw ? p.rw * 20 + " ms (-" + p.rlo * 20 + " / +" + p.rhi * 20 + ")" : "") + "</td></tr>";
     });
     $("presslist").innerHTML = html + "</table>";
     $("presslist").querySelectorAll("tr[data-col]").forEach(function (tr) {
@@ -1514,53 +1841,126 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     });
   }
 
-  // ---------------- music ----------------
-  var roll = $("roll"), rctx = roll.getContext("2d"), mSel = -1, mPlay = null;
+  // ---------------- music: FL-Studio-style piano roll ----------------
+  // The tune is monophonic: a list of notes {t (unit), len, midi} plus the loop
+  // length. Gaps become rests when written back to the token text (R1..R9),
+  // notes longer than 9 units become tied notes (C49 C43).
+  var roll = $("roll"), rctx = roll.getContext("2d"), rollwrap = $("rollwrap"), mPlay = null;
   roll.tabIndex = 0;
-  var UNITPX = 14, ROWPX = 6;
-  function tokens() { return GD.tuneTokens(doc.m); }
-  function setTokens(list) { pushUndo(); doc.m = list.join(" "); changed(); drawRoll(); updateMusicInfo(); }
-  function rawList() { return (doc.m || "").split(/\s+/).filter(Boolean); }
-  function rollRange(tk) {
-    var lo = 999, hi = -1;
-    tk.forEach(function (t) { if (t.midi != null) { lo = Math.min(lo, t.midi); hi = Math.max(hi, t.midi); } });
-    if (hi < 0) { lo = 60; hi = 72; }
-    lo -= 4; hi += 4;
-    if (hi - lo < 24) { var mid = (hi + lo) >> 1; lo = mid - 12; hi = mid + 12; }
-    return { lo: Math.max(12, lo), hi: Math.min(119, hi) };
-  }
+  var UNIT = 16, ROW = 10, KEYW = 44, LO = 43, HI = 100;   // G2 .. E7 (the beeper plays 100-8000 Hz)
   var NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  var rsel = [], rclip = null, lastLen = 2, rdrag = null, rhover = null;
+  function tokens() { return GD.tuneTokens(doc.m); }
+  function noteStr(midi, len) { var oct = Math.floor(midi / 12) - 1; return NAMES[midi % 12] + oct + len; }
+  function freqOf(midi) { return Math.floor(440 * Math.pow(2, (midi - 69) / 12)); }
+  // token text -> timeline (invalid tokens count as rests of their length, like on the radio)
+  function timeline(m) {
+    var tk = GD.tuneTokens(m), t = 0, notes = [];
+    tk.forEach(function (k) { if (k.midi != null && k.ok) notes.push({ t: t, len: k.len, midi: k.midi }); t += k.len; });
+    return { notes: notes, total: t };
+  }
+  // timeline -> token text
+  function tlText(notes, total) {
+    var out = [], cur = 0;
+    function rest(n) { while (n > 0) { var k = Math.min(9, n); out.push("R" + k); n -= k; } }
+    notes.slice().sort(function (a, b) { return a.t - b.t; }).forEach(function (n) {
+      if (n.t > cur) rest(n.t - cur);
+      var l = n.len;
+      while (l > 0) { var k = Math.min(9, l); out.push(noteStr(n.midi, k)); l -= k; }
+      cur = Math.max(cur, n.t + n.len);
+    });
+    if (total > cur) rest(total - cur);
+    return out.join(" ");
+  }
+  var TL = { notes: [], total: 0 };
+  function loadTL() { TL = timeline(doc.m); TL.src = doc.m; rsel = []; }
+  function commitTL() {
+    var end = 0;
+    TL.notes.forEach(function (n) { end = Math.max(end, n.t + n.len); });
+    if (end > TL.total) TL.total = end;
+    doc.m = tlText(TL.notes, TL.total); TL.src = doc.m;
+    changed(); updateMusicInfo(); drawRoll();
+  }
+  // monophonic: the notes in `keep` win, other notes under them are cut or removed
+  function resolve(keep) {
+    var out = [];
+    TL.notes.forEach(function (o) {
+      if (keep.indexOf(o) >= 0) { out.push(o); return; }
+      var a = o.t, b = o.t + o.len, alive = true;
+      keep.forEach(function (p) {
+        if (!alive) return;
+        var pa = p.t, pb = p.t + p.len;
+        if (a < pb && pa < b) {
+          if (a >= pa && b <= pb) alive = false;
+          else if (a < pa) b = pa;
+          else a = pb;
+        }
+      });
+      if (alive && b > a) { o.t = a; o.len = b - a; out.push(o); }
+    });
+    TL.notes = out;
+  }
+  function noteAt(t, midi) {
+    for (var i = TL.notes.length - 1; i >= 0; i--) { var n = TL.notes[i]; if (n.midi === midi && t >= n.t && t < n.t + n.len) return n; }
+    return null;
+  }
+  function cellOf(e) {
+    var rc = roll.getBoundingClientRect();
+    var px = (e.clientX - rc.left) * roll.width / rc.width, py = (e.clientY - rc.top) * roll.height / rc.height;
+    var fx = (px - KEYW) / UNIT;
+    return { t: Math.floor(fx), fx: fx, midi: HI - Math.floor(py / ROW), px: px, py: py };
+  }
   function drawRoll(playT) {
     if (!doc) return;
-    var tk = tokens(), rg = rollRange(tk), total = 0;
-    tk.forEach(function (t) { total += t.len; });
-    var W = Math.max(900, 40 + (total + 4) * UNITPX), H = (rg.hi - rg.lo + 1) * ROWPX;
+    if (TL.src !== doc.m) loadTL();
+    var W = Math.max(rollwrap.clientWidth || 900, KEYW + (TL.total + 32) * UNIT), H = (HI - LO + 1) * ROW;
     if (roll.width !== W) roll.width = W;
     if (roll.height !== H) roll.height = H;
+    var sx = rollwrap.scrollLeft || 0, sy = rollwrap.scrollTop || 0, m, y, t;
     rctx.fillStyle = "#15181c"; rctx.fillRect(0, 0, W, H);
-    rctx.font = "9px ui-monospace, Consolas, monospace"; rctx.textBaseline = "middle";
-    for (var m = rg.lo; m <= rg.hi; m++) {
-      var y = (rg.hi - m) * ROWPX, black = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0;
-      rctx.fillStyle = black ? "#1b1f24" : "#20252b"; rctx.fillRect(40, y, W - 40, ROWPX);
-      if (m % 12 === 0) { rctx.fillStyle = "#3a4250"; rctx.fillRect(40, y + ROWPX - 1, W - 40, 1); rctx.fillStyle = "#9aa3ad"; rctx.fillText("C" + (m / 12 - 1), 4, y + ROWPX / 2); }
+    for (m = LO; m <= HI; m++) {
+      y = (HI - m) * ROW;
+      rctx.fillStyle = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0 ? "#1a1e23" : "#22272e";
+      rctx.fillRect(KEYW, y, W - KEYW, ROW - 1);
     }
-    var x = 40, u = 0;
-    tk.forEach(function (t, i) {
-      var w = t.len * UNITPX;
-      rctx.fillStyle = "rgba(255,255,255,0.04)"; if (i % 2) rctx.fillRect(x, 0, w, H);
-      if (t.midi != null && t.ok) {
-        var y = (rg.hi - t.midi) * ROWPX;
-        rctx.fillStyle = i === mSel ? "#ffb547" : "#5fb3ff"; rctx.fillRect(x + 1, y, Math.max(2, w - 2), ROWPX);
-      } else {
-        rctx.fillStyle = i === mSel ? "rgba(255,181,71,0.5)" : t.ok ? "rgba(154,163,173,0.25)" : "rgba(255,107,107,0.45)";
-        rctx.fillRect(x + 1, H - 8, Math.max(2, w - 2), 6);
-      }
-      if (i === mSel) { rctx.strokeStyle = "#ffb547"; rctx.strokeRect(x + 0.5, 0.5, w - 1, H - 1); }
-      x += w; u += t.len;
+    for (t = 0; KEYW + t * UNIT < W; t++) {
+      rctx.fillStyle = t % 16 === 0 ? "#56607a" : t % 4 === 0 ? "#363e4c" : "#272d36";
+      rctx.fillRect(KEYW + t * UNIT, 0, 1, H);
+    }
+    // loop end
+    rctx.fillStyle = "#e23b3b"; rctx.fillRect(KEYW + TL.total * UNIT - 1, 0, 2, H);
+    rctx.fillStyle = "rgba(0,0,0,0.35)"; rctx.fillRect(KEYW + TL.total * UNIT + 1, 0, W, H);
+    // notes
+    rctx.font = "9px ui-monospace, Consolas, monospace"; rctx.textBaseline = "middle";
+    TL.notes.forEach(function (n) {
+      var x = KEYW + n.t * UNIT, yy = (HI - n.midi) * ROW, on = rsel.indexOf(n) >= 0;
+      if (n.midi < LO || n.midi > HI) return;
+      rctx.fillStyle = on ? "#ffb547" : "#5fb3ff"; rctx.fillRect(x + 1, yy, n.len * UNIT - 2, ROW - 1);
+      rctx.fillStyle = "rgba(0,0,0,0.35)"; rctx.fillRect(x + n.len * UNIT - 4, yy + 1, 2, ROW - 3);
+      if (n.len >= 2) { rctx.fillStyle = "#0b1520"; rctx.fillText(noteStr(n.midi, ""), x + 3, yy + ROW / 2); }
+      if (n.len > 9) { rctx.fillStyle = "#e89a1c"; rctx.fillRect(x + 9 * UNIT - 1, yy, 2, ROW - 1); }
     });
-    if (playT != null) { rctx.fillStyle = "#6fdc8c"; rctx.fillRect(40 + playT * UNITPX, 0, 2, H); }
-    var sv = mSel >= 0 && tk[mSel] ? tk[mSel] : null;
-    $("mSel").textContent = sv ? "selected #" + (mSel + 1) + ": " + sv.raw + (sv.ok ? "" : "  (" + sv.msg + ")") : "";
+    if (rdrag && rdrag.mode === "box") {
+      var b = rdrag;
+      rctx.strokeStyle = "#ffb547"; rctx.setLineDash([4, 3]);
+      rctx.strokeRect(Math.min(b.x0, b.x1), Math.min(b.y0, b.y1), Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0)); rctx.setLineDash([]);
+    }
+    if (rhover && !rdrag && rhover.t >= 0 && rhover.midi >= LO && rhover.midi <= HI && !noteAt(rhover.t, rhover.midi)) {
+      rctx.strokeStyle = "rgba(95,179,255,0.6)"; rctx.strokeRect(KEYW + rhover.t * UNIT + 0.5, (HI - rhover.midi) * ROW + 0.5, lastLen * UNIT - 1, ROW - 2);
+    }
+    if (playT != null) { rctx.fillStyle = "#6fdc8c"; rctx.fillRect(KEYW + playT * UNIT, 0, 2, H); }
+    // sticky keyboard and bar numbers
+    rctx.fillStyle = "#101317"; rctx.fillRect(sx, 0, KEYW, H);
+    for (m = LO; m <= HI; m++) {
+      y = (HI - m) * ROW;
+      var black = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0;
+      rctx.fillStyle = black ? "#2a2f36" : "#cfd5dc"; rctx.fillRect(sx + 24, y, KEYW - 26, ROW - 1);
+      if (m % 12 === 0 || (rhover && rhover.midi === m)) { rctx.fillStyle = m % 12 === 0 ? "#9aa3ad" : "#ffb547"; rctx.fillText(NAMES[m % 12] + (Math.floor(m / 12) - 1), sx + 2, y + ROW / 2); }
+    }
+    rctx.fillStyle = "#9aa3ad";
+    for (t = 0; KEYW + t * UNIT < W; t += 16) if (KEYW + t * UNIT >= sx + KEYW) rctx.fillText(String(t / 16 + 1), KEYW + t * UNIT + 3, sy + 6);
+    $("mSel").textContent = rsel.length ? rsel.length + " selected" + (rsel.length === 1 ? ": " + noteStr(rsel[0].midi, "") + " at unit " + rsel[0].t + ", " + rsel[0].len + " units" : "") : "";
+    $("mLen").textContent = lastLen;
   }
   function updateMusicInfo() {
     var tk = tokens(), units = 0, U = Number(doc.u);
@@ -1569,69 +1969,141 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     $("mInfo").textContent = tk.length + " tokens, " + units + " units = " + (units * U).toFixed(2) + " s per loop" + (doc.m ? "" : " (no tune: the level is silent and u/m are left out of the file)");
     var bad = tk.map(function (t, i) { return t.ok ? null : "#" + (i + 1) + " " + t.raw + ": " + t.msg; }).filter(Boolean);
     var uerr = isNaN(Number(doc.u)) || doc.u === "" || Number(doc.u) <= 0 ? "u must be a positive number (seconds per unit), e.g. 0.1" : "";
-    $("mErr").innerHTML = (uerr ? "<div class='bad'>" + uerr + "</div>" : "") + (bad.length ? "<div class='warn'>" + bad.join("<br>") + "</div>" : (doc.m ? "<span class='ok'>All tokens valid.</span>" : ""));
+    $("mErr").innerHTML = (uerr ? "<div class='bad'>" + uerr + "</div>" : "") + (bad.length ? "<div class='warn'>" + bad.join("<br>") + " (editing in the piano roll turns these into rests)</div>" : (doc.m ? "<span class='ok'>All tokens valid.</span>" : ""));
   }
-  function tokenAtX(px) {
-    var tk = tokens(), x = 40;
-    for (var i = 0; i < tk.length; i++) { var w = tk[i].len * UNITPX; if (px >= x && px < x + Math.max(w, 4)) return i; x += w; }
-    return -1;
-  }
-  function noteStr(midi, len) { var oct = Math.floor(midi / 12) - 1; return NAMES[midi % 12] + oct + len; }
+  rollwrap.addEventListener("scroll", function () { drawRoll(); });
   roll.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   roll.addEventListener("mousedown", function (e) {
-    roll.focus();
-    var rc = roll.getBoundingClientRect(), px = (e.clientX - rc.left) * roll.width / rc.width, py = (e.clientY - rc.top) * roll.height / rc.height;
-    var i = tokenAtX(px); if (i < 0) { mSel = -1; drawRoll(); return; }
-    var tk = tokens(), list = rawList(), t = tk[i], rg = rollRange(tk);
-    var midi = rg.hi - Math.floor(py / ROWPX);
-    var len = Math.max(1, Math.min(9, t.len || 1));
-    if (e.button === 2) { list[i] = "R" + len; mSel = i; setTokens(list); return; }
-    if (mSel === i || t.midi == null || !t.ok) {
-      if (midi >= 12 && midi <= 119) { list[i] = noteStr(midi, len); mSel = i; setTokens(list); beep(Math.floor(440 * Math.pow(2, (midi - 69) / 12)), 150); return; }
+    roll.focus(); e.preventDefault();
+    var c = cellOf(e);
+    if (c.px < (rollwrap.scrollLeft || 0) + KEYW) { if (c.midi >= LO && c.midi <= HI) beep(freqOf(c.midi), 150); return; }
+    if (c.t < 0 || c.midi < LO || c.midi > HI) return;
+    pushUndo();
+    if (e.button === 2) {   // right click / right drag deletes
+      rdrag = { mode: "erase" };
+      var hit = noteAt(c.t, c.midi);
+      if (hit) { TL.notes.splice(TL.notes.indexOf(hit), 1); rsel = []; commitTL(); }
+      return;
     }
-    mSel = i; drawRoll();
-    if (t.f > 0) beep(Math.floor(t.f), 150);
+    if (e.button !== 0) return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) { rdrag = { mode: "box", x0: c.px, y0: c.py, x1: c.px, y1: c.py, add: e.shiftKey }; return; }
+    var n = noteAt(c.t, c.midi);
+    if (n) {
+      beep(freqOf(n.midi), 150);
+      if (rsel.indexOf(n) < 0) rsel = [n];
+      var edge = c.fx > n.t + n.len - 0.3;
+      rdrag = { mode: edge ? "len" : "move", n: n, t0: c.t, m0: c.midi, orig: rsel.map(function (q) { return { q: q, t: q.t, midi: q.midi, len: q.len }; }), base: TL.notes.map(function (q) { return { q: q, t: q.t, len: q.len, midi: q.midi }; }) };
+      lastLen = n.len;
+      drawRoll();
+      return;
+    }
+    // empty cell: place a note with the last length, then it can be dragged
+    var nn = { t: c.t, len: lastLen, midi: c.midi };
+    TL.notes.push(nn); resolve([nn]); rsel = [nn];
+    beep(freqOf(c.midi), 150);
+    rdrag = { mode: "move", n: nn, t0: c.t, m0: c.midi, orig: [{ q: nn, t: nn.t, midi: nn.midi, len: nn.len }], base: TL.notes.map(function (q) { return { q: q, t: q.t, len: q.len, midi: q.midi }; }) };
+    commitTL();
   });
+  window.addEventListener("mousemove", function (e) {
+    if (!rdrag && e.target !== roll) return;
+    var c = cellOf(e);
+    rhover = c;
+    if (!rdrag) { drawRoll(); return; }
+    if (rdrag.mode === "erase") {
+      var hit = noteAt(c.t, c.midi);
+      if (hit) { TL.notes.splice(TL.notes.indexOf(hit), 1); rsel = []; commitTL(); }
+      return;
+    }
+    if (rdrag.mode === "box") { rdrag.x1 = c.px; rdrag.y1 = c.py; drawRoll(); return; }
+    // move / resize: start again from the notes as they were when the drag began
+    TL.notes = rdrag.base.map(function (b) { b.q.t = b.t; b.q.len = b.len; b.q.midi = b.midi; return b.q; });
+    if (rdrag.mode === "len") {
+      var n = rdrag.n, nl = Math.max(1, Math.min(32, c.t - n.t + 1));
+      n.len = nl; lastLen = Math.min(9, nl);
+      resolve([n]);
+    } else {
+      var dt = c.t - rdrag.t0, dm = c.midi - rdrag.m0, minT = 0, ok = true;
+      rdrag.orig.forEach(function (o) { if (o.t + dt < 0 || o.midi + dm < LO || o.midi + dm > HI) ok = false; });
+      if (ok) {
+        rdrag.orig.forEach(function (o) { o.q.t = o.t + dt; o.q.midi = o.midi + dm; });
+        if (dm !== rdrag.lastDm && rdrag.orig.length === 1) beep(freqOf(rdrag.orig[0].q.midi), 100);
+        rdrag.lastDm = dm;
+      }
+      resolve(rdrag.orig.map(function (o) { return o.q; }));
+    }
+    var end = 0;
+    TL.notes.forEach(function (q) { end = Math.max(end, q.t + q.len); });
+    if (end > TL.total) TL.total = end;
+    doc.m = tlText(TL.notes, TL.total); TL.src = doc.m;
+    $("fM").value = doc.m;
+    drawRoll();
+  });
+  window.addEventListener("mouseup", function () {
+    if (!rdrag) return;
+    if (rdrag.mode === "box") {
+      var b = rdrag, t0 = (Math.min(b.x0, b.x1) - KEYW) / UNIT, t1 = (Math.max(b.x0, b.x1) - KEYW) / UNIT;
+      var m1 = HI - Math.min(b.y0, b.y1) / ROW, m0 = HI - Math.max(b.y0, b.y1) / ROW;
+      var hits = TL.notes.filter(function (n) { return n.t < t1 && n.t + n.len > t0 && n.midi + 1 > m0 && n.midi <= m1; });
+      rsel = b.add ? rsel.concat(hits.filter(function (n) { return rsel.indexOf(n) < 0; })) : hits;
+      rdrag = null; drawRoll(); return;
+    }
+    rdrag = null;
+    commitTL();
+  });
+  roll.addEventListener("mouseleave", function () { rhover = null; if (!rdrag) drawRoll(); });
   roll.addEventListener("wheel", function (e) {
-    var rc = roll.getBoundingClientRect(), i = tokenAtX((e.clientX - rc.left) * roll.width / rc.width);
-    if (i < 0) return;
-    e.preventDefault(); mSel = i; changeLen(e.deltaY < 0 ? 1 : -1);
+    if (!e.ctrlKey) return;   // Ctrl+wheel over a note = length; plain wheel scrolls
+    var c = cellOf(e), n = noteAt(c.t, c.midi); if (!n) return;
+    e.preventDefault(); pushUndo();
+    n.len = Math.max(1, Math.min(32, n.len + (e.deltaY < 0 ? 1 : -1))); lastLen = Math.min(9, n.len);
+    resolve([n]); commitTL();
   }, { passive: false });
-  function changeLen(d) {
-    var list = rawList(), tk = tokens(), t = tk[mSel]; if (!t) return;
-    var len = Math.max(1, Math.min(9, (t.len || 1) + d));
-    if (t.midi != null) list[mSel] = noteStr(t.midi, len); else list[mSel] = "R" + len;
-    setTokens(list);
-  }
-  function changePitch(d) {
-    var list = rawList(), t = tokens()[mSel]; if (!t || t.midi == null) return;
-    var midi = Math.max(12, Math.min(119, t.midi + d));
-    list[mSel] = noteStr(midi, Math.max(1, t.len)); setTokens(list);
-    beep(Math.floor(440 * Math.pow(2, (midi - 69) / 12)), 150);
-  }
-  function insertTok(s) { var list = rawList(), at = mSel >= 0 ? mSel + 1 : list.length; list.splice(at, 0, s); mSel = at; setTokens(list); }
-  function moveTok(d) { var list = rawList(), j = mSel + d; if (mSel < 0 || j < 0 || j >= list.length) return; var t = list[mSel]; list[mSel] = list[j]; list[j] = t; mSel = j; setTokens(list); }
-  function delTok() { var list = rawList(); if (mSel < 0 || mSel >= list.length) return; list.splice(mSel, 1); mSel = Math.min(mSel, list.length - 1); setTokens(list); }
   function rollKey(e) {
-    var k = e.key;
-    if (k === "ArrowUp") { changePitch(1); } else if (k === "ArrowDown") { changePitch(-1); }
-    else if (k === "ArrowLeft") { mSel = Math.max(0, mSel - 1); drawRoll(); } else if (k === "ArrowRight") { mSel = Math.min(tokens().length - 1, mSel + 1); drawRoll(); }
-    else if (k === "+" || k === "=") changeLen(1); else if (k === "-") changeLen(-1);
-    else if (k === "Delete" || k === "Backspace") delTok();
+    var k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (k === "a" || k === "A")) { rsel = TL.notes.slice(); drawRoll(); }
+    else if (ctrl && (k === "c" || k === "C")) {
+      if (!rsel.length) return false;
+      var t0 = Math.min.apply(null, rsel.map(function (n) { return n.t; }));
+      rclip = rsel.map(function (n) { return { t: n.t - t0, len: n.len, midi: n.midi }; });
+      toast("Copied " + rclip.length + " note(s).");
+    } else if (ctrl && (k === "v" || k === "V")) {
+      if (!rclip) return false;
+      var at = rhover && rhover.t >= 0 ? rhover.t : rsel.length ? Math.max.apply(null, rsel.map(function (n) { return n.t + n.len; })) : TL.total;
+      pushUndo();
+      var add = rclip.map(function (q) { return { t: q.t + at, len: q.len, midi: q.midi }; });
+      TL.notes = TL.notes.concat(add); resolve(add); rsel = add; commitTL();
+    } else if (k === "Delete" || k === "Backspace") {
+      if (!rsel.length) return false;
+      pushUndo(); TL.notes = TL.notes.filter(function (n) { return rsel.indexOf(n) < 0; }); rsel = []; commitTL();
+    } else if (k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight") {
+      if (!rsel.length) return false;
+      var dm = k === "ArrowUp" ? (e.shiftKey ? 12 : 1) : k === "ArrowDown" ? (e.shiftKey ? -12 : -1) : 0, dt = k === "ArrowLeft" ? -1 : k === "ArrowRight" ? 1 : 0;
+      if (rsel.some(function (n) { return n.t + dt < 0 || n.midi + dm < LO || n.midi + dm > HI; })) return true;
+      pushUndo(); rsel.forEach(function (n) { n.t += dt; n.midi += dm; }); resolve(rsel.slice()); commitTL();
+      if (dm && rsel.length === 1) beep(freqOf(rsel[0].midi), 120);
+    } else if (k === "Escape") { rsel = []; drawRoll(); }
     else return false;
     e.preventDefault(); return true;
   }
-  $("mAdd").onclick = function () { var t = tokens()[mSel]; insertTok(t && t.midi != null ? noteStr(t.midi, Math.max(1, t.len)) : "C52"); };
-  $("mRest").onclick = function () { insertTok("R1"); };
-  $("mDel").onclick = delTok;
-  $("mLm").onclick = function () { changeLen(-1); }; $("mLp").onclick = function () { changeLen(1); };
-  $("mDn").onclick = function () { changePitch(-1); }; $("mUp").onclick = function () { changePitch(1); };
-  $("mOdn").onclick = function () { changePitch(-12); }; $("mOup").onclick = function () { changePitch(12); };
-  $("mLeft").onclick = function () { moveTok(-1); }; $("mRight").onclick = function () { moveTok(1); };
+  $("mLm").onclick = function () { lastLen = Math.max(1, lastLen - 1); if (rsel.length) { pushUndo(); rsel.forEach(function (n) { n.len = lastLen; }); resolve(rsel.slice()); commitTL(); } else drawRoll(); };
+  $("mLp").onclick = function () { lastLen = Math.min(9, lastLen + 1); if (rsel.length) { pushUndo(); rsel.forEach(function (n) { n.len = lastLen; }); resolve(rsel.slice()); commitTL(); } else drawRoll(); };
+  $("mTrim").onclick = function () { var end = 0; TL.notes.forEach(function (n) { end = Math.max(end, n.t + n.len); }); pushUndo(); TL.total = end; doc.m = tlText(TL.notes, end); TL.src = doc.m; changed(); updateMusicInfo(); drawRoll(); };
+  $("mBar").onclick = function () { pushUndo(); TL.total = (Math.floor(TL.total / 16) + 1) * 16; doc.m = tlText(TL.notes, TL.total); TL.src = doc.m; changed(); updateMusicInfo(); drawRoll(); };
   $("fM").onfocus = function () { pushUndo(); };
-  $("fM").oninput = function () { doc.m = this.value.replace(/[\r\n\t]+/g, " "); changed(); drawRoll(); updateMusicInfo(); };
+  $("fM").oninput = function () { doc.m = this.value.replace(/[\r\n\t]+/g, " "); loadTL(); changed(); drawRoll(); updateMusicInfo(); };
   $("fU").onfocus = function () { pushUndo(); };
   $("fU").oninput = function () { doc.u = this.value.trim(); changed(); updateMusicInfo(); };
+  window.gdRollTest = { timeline: timeline, tlText: tlText };  // used by the headless smoke test
+  window.gdDrawTest = { drawIcon: drawIcon, Lcd: Lcd };
+  window.gdPlayState = function () { return play; };
+  // centre the view on the tune's notes
+  function rollHome() {
+    var lo = 999, hi = -1;
+    TL.notes.forEach(function (n) { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
+    if (hi < 0) { lo = 60; hi = 72; }
+    rollwrap.scrollTop = Math.max(0, (HI - (lo + hi) / 2) * ROW - rollwrap.clientHeight / 2);
+    rollwrap.scrollLeft = 0;
+  }
 
   function playMusicPreview() {
     stopMusicPreview();
@@ -1679,7 +2151,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var unknown = rowsOf().join("").replace(new RegExp("[" + GD.TILE_CHARS.replace(/[\^\]\\-]/g, "\\$&") + "]", "g"), "");
     if (unknown) w.push("Unknown tile characters '" + Array.from(new Set(unknown)).join("") + "' (empty in the game).");
     var bytes = exportText().length;
-    if (bytes > 6000) w.push("File is " + bytes + " bytes; the biggest stock level is ~1.8 KB. Very long levels cost RAM on the radio (all rows stay in memory while playing).");
+    if (bytes > 6000) w.push("File is " + bytes + " bytes (target: 6 KB or less for a 90 s level). The radio keeps the coded rows in RAM while playing; shorten the level or use longer runs of the same tile (empty space is almost free).");
     if (BUNDLED[doc.n]) w.push("L" + doc.n + " already exists in the game (" + (GD.parseHeader(BUNDLED[doc.n]) || { name: "?" }).name + "). Saving as L" + doc.n + ".lua replaces it; for a new level use L" + nextFreeNumber() + ".lua.");
     return w;
   }

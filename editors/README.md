@@ -30,11 +30,48 @@ So adding a level or song **never needs a change to the game**. Two rules:
 2. Set **Name** and **Difficulty**. They show up in the level picker.
 3. Paint the level. Pick a tile from the palette (or type its character), left-drag paints, right-drag erases.
    The **Help** tab explains every tile: blocks, slabs, spikes, orbs, pads and portals.
-4. Write the music in the **Music** tab and press Play to hear it.
-5. Press **Play-test** to try it (Space jumps), then **Check beatable**. The solver says whether the level can be
-   finished and marks presses that need very exact timing (red = under 60 ms, too tight for the radio).
+4. Write the music in the **Music** tab: a piano roll like FL Studio (left click adds a note, drag moves it, drag
+   its right edge to resize, right click deletes, Shift/Ctrl-drag selects) and press Play to hear it.
+5. Press **Play-test** to try it (Space or the mouse button = SA, held as long as you hold it; Enter = a tap), then
+   **Check beatable**. The solver searches taps and holds, says whether the level can be finished and marks
+   presses and releases that need very exact timing (red = under 60 ms, too tight for the radio).
 6. **Download .lua** and name it with the next free number, e.g. `L9.lua`.
 7. Copy it to the card (see below).
+
+### Tiles
+
+One character per 8x8 cell, 6 rows. The same table is at the top of `GDASH/phys.lua`, in
+`tools/gdash/levels.txt` and in the editor's **Help** tab (with all the numbers).
+
+| Char | Tile | Char | Tile |
+|---|---|---|---|
+| `.` | empty | `#` | block (solid) |
+| `=` | slab (solid top half) | `^` / `v` | spike / hanging spike |
+| `o` | yellow orb: jump | `i` | pink orb: small jump |
+| `r` | red orb: big jump | `q` | blue orb: gravity flip |
+| `e` | green orb: flip + jump | `b` | black orb: slam down |
+| `a` | green dash orb (hold = dash straight) | `h` | pink dash orb (flip, then dash) |
+| `p` | yellow pad | `k` | pink pad (small) |
+| `f` | red pad (big) | `u` | blue pad: gravity flip |
+| `w` | spider pad: teleport to the surface above, flip | | |
+| `C` | cube portal | `U` | UFO portal |
+| `S` | ship portal (hold = up) | `B` | ball portal (press = flip) |
+| `W` | wave portal (hold = up 45°) | `R` | robot portal (hold = higher jump) |
+| `X` | spider portal (press = teleport) | `Z` | swing portal (press = flip, also in the air) |
+| `G` / `g` | gravity up / down | `m` / `n` | mini / normal size |
+| `D` / `d` | dual / single | `T` | teleport: to the row of the `t` in the same column |
+| `t` | teleport exit | `0`-`4` | speed 50 / 70 / 90 / 110 / 130 px/s |
+
+Portals act on the whole column (any row) when the icon's centre enters it; several can share a column
+(`D` + `W` = dual wave). Flying modes (UFO, ship, wave, swing) use the whole 6-row field as their corridor.
+
+### File format
+
+`L<n>.lua` returns `{ "row1", ..., "row6", u = <seconds per note unit>, m = "<tune>" }`, ground row first, with
+`-- @Name|Difficulty` as its first line. Rows are **run-length coded**: a run of 4 or more equal tiles is written
+`c*N`, where `N` is a single character whose code minus 32 is the count (`.*D` = 36 dots, `^*$` = 4 spikes;
+at most 94 per run). The game keeps the rows coded in memory and decodes only the columns around the icon, so a level costs about its file size in radio RAM. Plain rows (the old format) still load,
+and the editor can export them (**plain rows** on the Export tab). A 90 s level is typically 3-4 KB.
 
 ## Add a Rhythm song
 
@@ -80,4 +117,5 @@ Best % (Geometry Dash) and best scores (Rhythm) are stored per number, so replac
 ## Size
 
 Keep a level or song file under about 8 KB; the radio has little memory. The editors show the file size and warn
-when it gets large.
+when it gets large. For Geometry Dash the radio keeps the level run-length coded while playing, so the
+file size is what counts: keep a level under about 6 KB (a 90 s level is typically 3-4 KB); the editor warns above that.

@@ -1,4 +1,24 @@
-= 1
+// Geometry Dash level source. Build: node build.js levels.txt <out dir> [--plain]
+// (writes L<n>.lua; the stock set lives in My_TX-12/SCRIPTS/GAMES/GDASH/).
+//
+//   = <n> <Name>|<Difficulty>   starts level n; the name/difficulty become the file's first line
+//   ! <u> <tune>                music: seconds per unit, then tokens (C42 = C4 for 2 units, R1 = rest)
+//   ~<N>                        N empty columns
+//   // ...                      comment
+//   anything else               a segment: up to 6 lines of tiles, top row first, bottom-aligned
+//                               (" " or "." = empty); a blank line ends the segment
+// A tile line must not start with "= ", "! ", "~" or "//" (start it with "." instead).
+//
+// Tiles (one character per 8x8 cell; full table at the top of GDASH/phys.lua):
+//   # block  = slab  ^ spike  v hanging spike
+//   orbs (press): o yellow  i pink  r red  q blue(flip)  e green(flip+jump)  b black(down)
+//                 a green dash  h pink dash (hold to dash)
+//   pads (touch): p yellow  k pink  f red  u blue(flip)  w spider
+//   portals (whole column): C cube  U ufo  S ship  B ball  W wave  R robot  X spider  Z swing
+//                 G/g gravity up/down  m/n mini/normal  D/d dual/single  T teleport (to the t
+//                 in the same column)  t teleport exit  0-4 speed 50/70/90/110/130 px/s
+// Output rows are run-length coded ("c*N" = c repeated byte(N)-32 times) unless --plain.
+= 1 First Step|Easy
 ! 0.11 C42 G42 E52 G42 C42 G42 E52 D52 A32 E42 C52 E42 A32 E42 C52 B42 F32 C42 A42 C42 F32 C42 A42 C52 G32 D42 B42 D42 G32 D42 G52 B42
 ~14
 .....^............^............^^...............
@@ -17,7 +37,7 @@
 .....^^^...........^......^^.........
 ~10
 
-= 2
+= 2 Back Beat|Easy
 ! 0.11 A32 A42 R1 A42 C52 A42 E52 A42 F32 F42 R1 F42 A42 F42 C52 F42 G32 G42 R1 G42 B42 G42 D52 G42 E32 E42 R1 E42 G#42 E42 B42 E42
 ~12
 ....^^.........^...^.........
@@ -42,7 +62,7 @@
 ....^^.....##.....^^^......
 ~10
 
-= 3
+= 3 Pad Jumper|Normal
 ! 0.1 D42 D52 A42 D52 F52 E52 D52 A42 C42 C52 G42 C52 E52 D52 C52 G42 A#32 A#42 F42 A#42 D52 C52 A#42 F42 A32 A42 E42 A42 C#52 E52 A52 E52
 ~12
 ....^^.......^......
@@ -73,7 +93,7 @@
 ....^^...p....###....
 ~10
 
-= 4
+= 4 Orbit|Normal
 ! 0.09 E42 B42 E52 B42 G52 B42 F#52 B42 C42 G42 C52 G42 E52 G42 D52 G42 D42 A42 D52 A42 F#52 A42 E52 A42 B32 F#42 B42 F#42 D#52 F#42 B42 D#52
 ~6
 ..3....
@@ -99,7 +119,7 @@
 ...###..^..###..^..###.......
 ~10
 
-= 5
+= 5 Flip Side|Hard
 ! 0.1 F#32 C#42 F#42 A42 C#52 A42 F#42 C#42 D32 A32 D42 F#42 A42 F#42 D42 A32 E32 B32 E42 G#42 B42 G#42 E42 B32 C#42 G#42 C#52 E52 G#52 E52 C#52 G#42
 ~10
 ...^....^^.......
@@ -140,7 +160,7 @@
 ...^^.......^^^.......
 ~10
 
-= 6
+= 6 Saucer|Harder
 ! 0.11 G42 R1 D52 G52 A#52 R1 A52 G52 D#42 R1 A#42 D#52 G52 R1 F52 D#52 F42 R1 C52 F52 A52 R1 G52 F52 D42 R1 A42 D52 F#52 A52 F#52 D52
 ~8
 ...^^.......
@@ -170,7 +190,7 @@
 .......^^....^^^....
 ~10
 
-= 7
+= 7 Overdrive|Insane
 ! 0.08 A32 A42 A32 A42 C52 A42 D52 A42 A32 A42 A32 A42 E52 D52 C52 B42 F32 F42 F32 F42 A42 F42 C52 F42 G32 G42 G32 G42 B42 G42 D52 B42
 ~6
 ..3...
@@ -208,7 +228,7 @@
 .....^^.......^^^.......
 ~10
 
-= 8
+= 8 Dash Demon|Demon
 ! 0.08 E32 E42 G42 E42 A#42 E42 A42 G42 E32 E42 G42 E42 D52 C52 B42 G42 C42 C52 B42 C52 G42 C52 F#42 C52 B32 B42 D#52 F#52 B52 F#52 D#52 B42
 ~6
 ..4...
