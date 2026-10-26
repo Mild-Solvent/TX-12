@@ -22,8 +22,10 @@ input,select{padding:3px 5px}input[type=number]{width:70px}textarea{width:100%;p
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
 .row label{display:flex;gap:4px;align-items:center;color:var(--dim)}
 .sep{width:1px;height:20px;background:var(--line);margin:0 4px}
-#rollWrap{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:6px;background:#11141a}
-#roll{display:block;cursor:default}
+#rollBox{position:relative;height:380px;min-height:160px;resize:vertical;overflow:hidden;border:1px solid var(--line);border-radius:6px;background:#11141a}
+#rollScroll{position:absolute;inset:0;overflow:auto}
+#rollSizer{width:1px;height:1px}
+#roll{position:absolute;left:0;top:0;display:block;cursor:crosshair;user-select:none}
 #field{width:100%;max-width:520px;image-rendering:pixelated;border-radius:6px;display:block;background:var(--lcd);cursor:crosshair}
 .mono{font-family:Consolas,monospace}
 .small{font-size:12px;color:var(--dim)}
@@ -85,14 +87,18 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
     <h2>Melody / chart <span class="legend small" style="text-transform:none;letter-spacing:0;font-weight:400;margin-left:10px">
       <span><i style="background:var(--tap)"></i>tap</span><span><i style="background:var(--hold)"></i>hold (h)</span><span><i style="background:var(--slider)"></i>slider (s)</span><span><i style="background:var(--mus)"></i>music only (x)</span><span><i style="background:var(--rest)"></i>rest</span></span></h2>
     <div class="row small">
-      <label>zoom <input type="range" id="rZoom" min="6" max="48" value="18" style="width:90px"></label>
-      <label>new note length <select id="sNewLen"></select></label>
-      <span>Click select, <kbd>Shift</kbd>+click range, drag up/down = pitch, drag sideways = move, drag right edge = length, double-click empty = add note, click ruler = playhead.</span>
+      <label title="Type of the notes you place with a left click">new note <select id="sNewType"><option value="">tap</option><option value="h">hold</option><option value="s">slider</option><option value="x">music only</option></select></label>
+      <label title="Length (units) of placed notes; follows the last note you clicked or resized">length <select id="sNewLen"></select></label>
+      <span class="sep"></span>
+      <label title="Ctrl+wheel over the roll">zoom <input type="range" id="rZoom" min="4" max="60" value="18" style="width:80px"></label>
+      <label title="Alt+wheel over the roll">rows <input type="range" id="rRow" min="6" max="22" value="11" style="width:60px"></label>
+      <button id="bCenter" title="Scroll the roll to the song's notes">Center</button>
     </div>
-    <div id="rollWrap"><canvas id="roll" height="300"></canvas></div>
+    <div id="rollBox"><div id="rollScroll"><div id="rollSizer"></div></div><canvas id="roll"></canvas></div>
+    <div class="small" style="margin-top:4px">Like FL Studio: <b>left click</b> empty cell = add note (then drag to place) · <b>left-drag</b> note = move (time + pitch) · drag its <b>right edge</b> = length (1-9) · <b>right click</b> / right-drag = delete · <kbd>Shift</kbd>+drag = box select · click ruler = playhead · wheel = scroll (<kbd>Shift</kbd> sideways, <kbd>Ctrl</kbd> zoom, <kbd>Alt</kbd> row height). One note at a time: a note placed over others cuts them, gaps become rests.</div>
     <div class="row" style="margin-top:8px" id="insp"></div>
     <div class="row">
-      <button id="bAddN">+ Note after</button><button id="bAddR">+ Rest after</button><button id="bDup">Duplicate</button><button id="bDel">Delete</button>
+      <button id="bAddN">+ Note after</button><button id="bAddR">+ Rest after</button><button id="bDup">Duplicate</button><button id="bDel" title="Del: remove the selected notes, leaving silence (a selection of only rests is removed)">Delete</button><button id="bCut" title="Remove the selected tokens and close the gap (later notes move earlier)">Remove time</button>
       <span class="sep"></span>
       Transpose <button data-tr="-12">-oct</button><button data-tr="-1">-1</button><button data-tr="1">+1</button><button data-tr="12">+oct</button>
       <select id="sTrScope"><option value="sel">selection</option><option value="all">whole song</option></select>
@@ -165,7 +171,9 @@ kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padd
     </ul></details>
     <details><summary>Keys</summary><ul class="small">
       <li><kbd>Space</kbd> play/stop · <kbd>Home</kbd> to start · <kbd>←</kbd><kbd>→</kbd> select prev/next · <kbd>↑</kbd><kbd>↓</kbd> pitch (<kbd>Shift</kbd> = octave)</li>
-      <li><kbd>1</kbd>-<kbd>9</kbd> length · <kbd>T</kbd> tap <kbd>H</kbd> hold <kbd>S</kbd> slider <kbd>X</kbd> music only · <kbd>N</kbd> add note · <kbd>R</kbd> add rest · <kbd>B</kbd> file line break after · <kbd>Del</kbd> delete · <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd></li>
+      <li><kbd>1</kbd>-<kbd>9</kbd> length · <kbd>T</kbd> tap <kbd>H</kbd> hold <kbd>S</kbd> slider <kbd>X</kbd> music only · <kbd>N</kbd> add note · <kbd>R</kbd> add rest · <kbd>B</kbd> file line break after · <kbd>Del</kbd> delete (leaves silence) · <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd></li>
+      <li><kbd>Ctrl+C</kbd> copy · <kbd>Ctrl+X</kbd> cut · <kbd>Ctrl+V</kbd> paste after the selection (or at the playhead), overwriting that stretch · <kbd>Ctrl+A</kbd> select all</li>
+      <li>Roll: left click adds, right click deletes, drag moves, right edge resizes, <kbd>Shift</kbd>+drag box-selects. A token is at most 9 units long; for a longer sound put a music-only (x) note of the same pitch right after it.</li>
       <li>Work is autosaved in this browser.</li>
     </ul></details>
   </div>
@@ -766,11 +774,79 @@ var TXR = (function () {
     return out;
   }
 
+  // ---------- grid model: the token string seen as notes on a time grid ----------
+  // A song is monophonic and sequential, so a note's start is the sum of the lengths before it.
+  // gridNotes() lifts the tokens to {u, l, midi, mk} notes (rests become gaps); itemsFromGrid()
+  // writes notes back as tokens, filling gaps with R<n> (reusing the original rest tokens where a
+  // gap is unchanged, so untouched parts of the file stay byte-identical).
+  function gridNotes(items) {
+    var notes = [], u = 0, end = 0;
+    items.forEach(function (it, i) {
+      var len = decodeToken(itemToken(it)).len;
+      if (it.t === "n") notes.push({ kind: "n", u: u, l: len, midi: itemMidi(it), mk: it.mk || "", br: !!it.br, idx: i });
+      else if (it.t === "raw") notes.push({ kind: "raw", u: u, l: len, midi: null, text: it.text, br: !!it.br, idx: i });
+      u += len;
+      if (it.t !== "r") end = u;
+    });
+    return { notes: notes, total: u, tail: u - end };
+  }
+  function lastEnd(notes) { var e = 0; notes.forEach(function (n) { if (n.u + n.l > e) e = n.u + n.l; }); return e; }
+  // remove notes starting inside [s, e), cut the one sounding into s (invalid tokens can't be cut: removed)
+  function clearSpan(notes, s, e) {
+    var out = [];
+    notes.forEach(function (o) {
+      if (o.u >= s && (o.u < e || o.u === s)) return;
+      if (o.u < s && o.u + o.l > s) { if (o.kind === "raw") return; var c = {}; for (var k in o) c[k] = o[k]; c.l = s - o.u; out.push(c); return; }
+      out.push(o);
+    });
+    return out;
+  }
+  // put notes `add` over `base`; whatever they cover is trimmed / replaced (monophonic)
+  function placeOver(base, add) {
+    var out = base;
+    add.forEach(function (n) { out = clearSpan(out, n.u, n.u + Math.max(n.l, 0)); });
+    return out.concat(add);
+  }
+  function itemsFromGrid(notes, orig, tail) {
+    var ou = [], u = 0, i;
+    for (i = 0; i < orig.length; i++) { ou.push(u); u += decodeToken(itemToken(orig[i])).len; }
+    ou.push(u);
+    function reuse(g0, g1) {
+      for (var a = 0; a < orig.length; a++) {
+        if (ou[a] > g0) break;
+        if (ou[a] !== g0 || orig[a].t !== "r") continue;
+        var b = a;
+        while (b < orig.length && orig[b].t === "r" && ou[b] < g1) b++;
+        if (ou[b] === g1) return orig.slice(a, b).map(function (r) { return { t: "r", l: r.l, br: !!r.br }; });
+        return null;
+      }
+      return null;
+    }
+    var ns = notes.slice().sort(function (a, b) { return a.u - b.u; }), out = [], pos = 0;
+    function gap(to) {
+      if (to <= pos) return;
+      var re = reuse(pos, to);
+      if (re) Array.prototype.push.apply(out, re);
+      else for (var g = to - pos; g > 0; g -= 9) out.push({ t: "r", l: Math.min(9, g), br: false });
+      pos = to;
+    }
+    ns.forEach(function (n) {
+      gap(n.u);
+      n.ni = out.length;
+      if (n.kind === "raw") out.push({ t: "raw", text: n.text, br: !!n.br });
+      else out.push({ t: "n", p: NAMES[n.midi % 12], o: Math.floor(n.midi / 12) - 1, l: n.l, mk: n.mk || "", br: !!n.br });
+      if (n.u + n.l > pos) pos = n.u + n.l;
+    });
+    gap(pos + (tail || 0));
+    return out;
+  }
+
   return { K: K, NAMES: NAMES, DEF_COMMENTS: DEF_COMMENTS, luaTokens: luaTokens, decodeToken: decodeToken, midiName: midiName,
     itemFromToken: itemFromToken, itemToken: itemToken, itemMidi: itemMidi, setMidi: setMidi, newSong: newSong,
     parseSong: parseSong, exportSong: exportSong, songM: songM, cleanHeader: cleanHeader, fileLines: fileLines,
     makeEngine: makeEngine, makeSwitches: makeSwitches, AutoBot: AutoBot, simulate: simulate, simState: simState, frameAt: frameAt,
-    grade: grade, Screen: Screen, drawGame: drawGame, validate: validate, parseNoteInput: parseNoteInput, transpose: transpose, quantize: quantize };
+    grade: grade, Screen: Screen, drawGame: drawGame, validate: validate, parseNoteInput: parseNoteInput, transpose: transpose, quantize: quantize,
+    gridNotes: gridNotes, lastEnd: lastEnd, clearSpan: clearSpan, placeOver: placeOver, itemsFromGrid: itemsFromGrid };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = TXR;
 </script>
@@ -786,7 +862,8 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
   var $ = function (id) { return document.getElementById(id); };
   var T = TXR, K = T.K;
   var song, slot = 6, sel = null, anchor = null, undoS = [], redoS = [], sim = null, playhead = 0;
-  var ppu = 18, ROW = 10, RULER = 18, LM = 44, REST_LANE = 16;
+  var ppu = 18, ROW = 11, RULER = 20, LM = 44, REST_LANE = 18, PMIN = 12, PMAX = 131, NROWS = PMAX - PMIN + 1;
+  var gn = { notes: [], total: 0, tail: 0 }, clip = null;
   var LS = "tx12-rhythm-editor-v1";
 
   function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.h); toast.h = setTimeout(function () { t.style.display = "none"; }, 2600); }
@@ -811,6 +888,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
       t = t + d.len * song.u; u += d.len;
     });
     tl.totalU = u; tl.totalT = t;
+    gn = T.gridNotes(song.items);
   }
 
   // ---------- simulation (debounced) ----------
@@ -846,21 +924,22 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     scheduleSim();
   }
 
-  // ---------- piano roll ----------
-  var roll = $("roll"), rctx = roll.getContext("2d"), pitchLo = 60, pitchHi = 72;
-  function pitchRange() {
-    var lo = 200, hi = -1;
-    song.items.forEach(function (it) { var m = T.itemMidi(it); if (m !== null) { lo = Math.min(lo, m); hi = Math.max(hi, m); } });
-    if (hi < 0) { lo = 60; hi = 72; }
-    lo -= 2; hi += 2;
-    while (hi - lo < 18) { hi++; if (hi - lo < 18) lo--; }
-    pitchLo = lo; pitchHi = hi;
-  }
-  function midiY(m) { return RULER + (pitchHi - m) * ROW; }
-  function yMidi(y) { return Math.max(12, Math.min(131, pitchHi - Math.floor((y - RULER) / ROW))); }
-  function uX(u) { return LM + u * ppu; }
-  function xU(x) { return (x - LM) / ppu; }
-  function laneY() { return RULER + (pitchHi - pitchLo + 1) * ROW + 2; }
+  // ---------- piano roll (FL-Studio-style grid) ----------
+  // x = units (one column each), y = pitch rows C0..B9. The canvas covers only the visible part of
+  // #rollScroll; #rollSizer gives the scrollbars their range and everything is drawn at the scroll
+  // offset, so the ruler (top), the rest lane (bottom) and the key labels (left) stay pinned.
+  // Edits go through the grid model (T.gridNotes / placeOver / itemsFromGrid): the song stays
+  // monophonic and the gaps are written back as R<n> tokens.
+  var roll = $("roll"), rctx = roll.getContext("2d"), rsc = $("rollScroll"), sizer = $("rollSizer");
+  var RW = 300, RH = 300, hover = null, drag = null;
+  function newLen() { return +$("sNewLen").value || 2; }
+  function setNewLen(l) { if (l >= 1 && l <= 9) $("sNewLen").value = String(l); }
+  function uX(u) { return LM + u * ppu - rsc.scrollLeft; }   // unit -> canvas x
+  function xU(x) { return (x - LM + rsc.scrollLeft) / ppu; } // canvas x -> unit
+  function midiY(m) { return RULER + (PMAX - m) * ROW - rsc.scrollTop; }
+  function yMidi(y) { return Math.max(PMIN, Math.min(PMAX, PMAX - Math.floor((y - RULER + rsc.scrollTop) / ROW))); }
+  function laneY() { return RH - REST_LANE; }
+  function region(p) { return p.y < RULER ? "ruler" : (p.y >= laneY() ? "lane" : (p.x < LM ? "keys" : "grid")); }
   function colorOf(it) {
     if (it.t === "r") return getCss("--rest");
     if (it.t === "raw") return getCss("--err");
@@ -871,128 +950,294 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
   }
   var cssCache = {};
   function getCss(v) { return cssCache[v] || (cssCache[v] = getComputedStyle(document.documentElement).getPropertyValue(v).trim()); }
+  function sizeRoll() {
+    var w = LM + ((tl.totalU || 0) + 64) * ppu, h = RULER + NROWS * ROW + REST_LANE;
+    if (sizer.style.width !== w + "px") sizer.style.width = w + "px";
+    if (sizer.style.height !== h + "px") sizer.style.height = h + "px";
+    RW = rsc.clientWidth; RH = rsc.clientHeight;
+    var dpr = window.devicePixelRatio || 1, pw = Math.round(RW * dpr), ph = Math.round(RH * dpr);
+    if (roll.width !== pw || roll.height !== ph) { roll.width = pw; roll.height = ph; roll.style.width = RW + "px"; roll.style.height = RH + "px"; }
+    rctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function isBlack(m) { return [1, 3, 6, 8, 10].indexOf(m % 12) >= 0; }
   function drawRoll() {
     if (!song) return;
-    pitchRange();
-    var H = laneY() + REST_LANE + 4, W = Math.max($("rollWrap").clientWidth - 2, uX(tl.totalU + 16));
-    if (roll.width !== Math.ceil(W) || roll.height !== H) { roll.width = Math.ceil(W); roll.height = H; }
-    var c = rctx, sl = $("rollWrap").scrollLeft, upb = +$("iUpb").value || 2, r = selRange();
-    c.fillStyle = "#11141a"; c.fillRect(0, 0, roll.width, H);
-    for (var m = pitchHi; m >= pitchLo; m--) {
-      var black = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0;
-      c.fillStyle = black ? "#161a21" : "#1b2029"; c.fillRect(LM, midiY(m), roll.width, ROW);
+    sizeRoll();
+    var c = rctx, W = RW, H = RH, LY = laneY(), upb = +$("iUpb").value || 2, r = selRange(), sl = rsc.scrollLeft, st = rsc.scrollTop;
+    var u0 = Math.max(0, Math.floor(xU(LM))), u1 = Math.ceil(xU(W)), mTop = yMidi(RULER), mBot = yMidi(LY - 1), m, u;
+    c.fillStyle = "#11141a"; c.fillRect(0, 0, W, H);
+    // ---- grid area ----
+    c.save(); c.beginPath(); c.rect(LM, RULER, W - LM, LY - RULER); c.clip();
+    for (m = mTop; m >= mBot; m--) {
+      c.fillStyle = isBlack(m) ? "#161a21" : "#1b2029"; c.fillRect(LM, midiY(m), W - LM, ROW);
+      c.fillStyle = m % 12 === 0 ? "#2f3744" : "#191d24"; c.fillRect(LM, midiY(m) + ROW - 1, W - LM, 1);
     }
-    var maxU = Math.ceil(xU(roll.width));
-    for (var u = 0; u <= maxU; u++) {
-      c.fillStyle = u % (upb * 4) === 0 ? "#3a4352" : (u % upb === 0 ? "#2a313d" : "#20252e");
-      c.fillRect(uX(u), RULER, 1, H - RULER);
+    for (u = u0; u <= u1; u++) {
+      c.fillStyle = u % (upb * 4) === 0 ? "#3f4959" : (u % upb === 0 ? "#2c3340" : "#20252d");
+      c.fillRect(Math.floor(uX(u)), RULER, 1, LY - RULER);
     }
-    c.fillStyle = "#232934"; c.fillRect(0, 0, roll.width, RULER);
-    c.font = "10px system-ui"; c.fillStyle = "#97a1b0";
-    for (u = 0; u <= maxU; u += upb) {
-      c.fillRect(uX(u), RULER - 5, 1, 5);
-      if ((u / upb) % 4 === 0) c.fillText((u * song.u).toFixed(1) + "s", uX(u) + 2, 11);
+    var xe = uX(tl.totalU);
+    if (xe < W) { c.fillStyle = "rgba(0,0,0,.28)"; c.fillRect(Math.max(LM, xe), RULER, W, LY - RULER); }
+    if (r && $("cLoop").checked) { c.fillStyle = "rgba(95,179,255,.10)"; c.fillRect(uX(tl[r[0]].u), RULER, (tl[r[1]].u + tl[r[1]].len - tl[r[0]].u) * ppu, LY - RULER); }
+    if (hover && !drag) {
+      c.strokeStyle = "rgba(255,255,255,.4)"; c.setLineDash([3, 3]); c.lineWidth = 1;
+      c.strokeRect(Math.floor(uX(hover.u)) + 1.5, midiY(hover.m) + 1.5, newLen() * ppu - 3, ROW - 3); c.setLineDash([]);
     }
-    c.fillStyle = "#1a1e25"; c.fillRect(LM, laneY(), roll.width, REST_LANE);
-    if (r && $("cLoop").checked) { c.fillStyle = "rgba(95,179,255,.10)"; c.fillRect(uX(tl[r[0]].u), RULER, (tl[r[1]].u + tl[r[1]].len - tl[r[0]].u) * ppu, H - RULER); }
-    // circle hit markers from the simulation (ticks on the ruler)
-    song.items.forEach(function (it, i) {
-      var x = tl[i]; if (!x) return;
-      var x0 = uX(x.u), w = Math.max(2, x.len * ppu - 1), y, h = ROW - 1;
-      if (it.t === "n") y = midiY(T.itemMidi(it)) + 1; else { y = laneY() + 2; h = REST_LANE - 4; }
-      c.fillStyle = colorOf(it);
-      c.globalAlpha = it.t === "n" && it.mk === "x" ? 0.75 : 1;
-      c.fillRect(x0 + 1, y, w - 1, h);
-      c.globalAlpha = 1;
-      if (it.t === "n" && it.mk !== "x") { c.fillStyle = "#0008"; c.beginPath(); c.arc(x0 + 5, y + h / 2, 2.4, 0, 7); c.fill(); }
-      if (it.t === "n" && (it.mk === "h" || it.mk === "s")) { // where the hold/slider ends
-        var eT = x.dur - Math.min(0.3, x.dur * 0.25); c.fillStyle = "#000a"; c.fillRect(x0 + eT / song.u * ppu, y, 2, h);
-      }
-      if (r && i >= r[0] && i <= r[1]) { c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.strokeRect(x0 + 1, y - 0.5, w - 1, h + 1); }
-      if (it.br && i < song.items.length - 1) { c.fillStyle = "#5fb3ff55"; c.fillRect(x0 + x.len * ppu - 1, RULER, 1, H - RULER); }
+    c.font = "9px system-ui"; c.textBaseline = "middle";
+    gn.notes.forEach(function (n) {
+      if (n.kind !== "n") return;
+      var x0 = Math.floor(uX(n.u)), w = Math.max(4, n.l * ppu), y = midiY(n.midi);
+      if (x0 > W || x0 + w < LM || y > LY || y + ROW < RULER) return;
+      var it = song.items[n.idx], s = tl[n.idx];
+      c.fillStyle = colorOf(it); c.globalAlpha = n.mk === "x" ? 0.7 : 1;
+      c.fillRect(x0 + 1, y + 1, w - 1, ROW - 2); c.globalAlpha = 1;
+      c.fillStyle = "#0005"; c.fillRect(x0 + w - 3, y + 1, 3, ROW - 2); // resize handle
+      if (n.mk !== "x" && w > 8) { c.fillStyle = "#0009"; c.beginPath(); c.arc(x0 + 5, y + ROW / 2, Math.min(2.4, ROW / 4), 0, 7); c.fill(); }
+      if ((n.mk === "h" || n.mk === "s") && s) { var eT = s.dur - Math.min(0.3, s.dur * 0.25); c.fillStyle = "#000a"; c.fillRect(x0 + eT / song.u * ppu, y + 1, 2, ROW - 2); }
+      if (w > 30 && ROW >= 10) { c.fillStyle = "#0b0d10"; c.fillText(T.midiName(n.midi), x0 + 10, y + ROW / 2 + 0.5); }
+      if (r && n.idx >= r[0] && n.idx <= r[1]) { c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.strokeRect(x0 + 1, y + 0.75, w - 1, ROW - 1.5); }
     });
-    c.fillStyle = "#ff6b6b"; c.fillRect(uX(playhead / song.u), 0, 2, H);
-    // pinned pitch labels
-    c.fillStyle = "#232934"; c.fillRect(sl, RULER, LM - 2, H - RULER);
-    c.font = "9px system-ui";
-    for (m = pitchHi; m >= pitchLo; m--) {
-      c.fillStyle = m % 12 === 0 ? "#e3e7ee" : "#7f8a99";
-      if (m % 12 === 0 || [2, 4, 5, 7, 9, 11].indexOf(m % 12) >= 0 || ROW > 9) c.fillText(T.midiName(m), sl + 3, midiY(m) + ROW - 2);
+    c.restore();
+    // ---- rest lane (pinned at the bottom) ----
+    c.fillStyle = "#1a1e25"; c.fillRect(0, LY, W, REST_LANE);
+    c.fillStyle = "#343b47"; c.fillRect(0, LY, W, 1);
+    c.save(); c.beginPath(); c.rect(LM, LY, W - LM, REST_LANE); c.clip();
+    song.items.forEach(function (it, i) {
+      if (it.t === "n") return;
+      var s = tl[i], x0 = Math.floor(uX(s.u)), w = Math.max(3, s.len * ppu);
+      if (x0 > W || x0 + w < LM) return;
+      c.fillStyle = colorOf(it); c.fillRect(x0 + 1, LY + 3, w - 1, REST_LANE - 6);
+      if (r && i >= r[0] && i <= r[1]) { c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.strokeRect(x0 + 1, LY + 2.5, w - 1, REST_LANE - 5); }
+    });
+    c.restore();
+    // ---- ruler (pinned at the top) ----
+    c.fillStyle = "#232934"; c.fillRect(0, 0, W, RULER);
+    c.font = "10px system-ui"; c.textBaseline = "alphabetic";
+    for (u = Math.floor(u0 / upb) * upb; u <= u1; u += upb) {
+      var x = Math.floor(uX(u)); if (x < LM) continue;
+      var bar = u % (upb * 4) === 0;
+      c.fillStyle = bar ? "#c4ccd8" : "#6b7585"; c.fillRect(x, bar ? RULER - 9 : RULER - 5, 1, bar ? 9 : 5);
+      if (bar && ppu * upb * 4 >= 34) { c.fillStyle = "#c4ccd8"; c.fillText(String(u / (upb * 4) + 1), x + 3, 10); c.fillStyle = "#7f8a99"; if (ppu * upb * 4 >= 60) c.fillText((u * song.u).toFixed(1) + "s", x + 16, 10); }
     }
-    c.fillStyle = "#97a1b0"; c.fillText("rest", sl + 3, laneY() + 11);
-  }
-  function hitItem(x, y) {
-    var u = xU(x), lane = y >= laneY() && y < laneY() + REST_LANE;
-    for (var i = 0; i < song.items.length; i++) {
-      var it = song.items[i], s = tl[i];
-      if (u < s.u || u >= s.u + Math.max(s.len, 0.3)) continue;
-      if (it.t === "n") { var yy = midiY(T.itemMidi(it)); if (y >= yy && y < yy + ROW) return { i: i, edge: x > uX(s.u + s.len) - 5 }; }
-      else if (lane) return { i: i, edge: x > uX(s.u + s.len) - 5 };
+    if (r && $("cLoop").checked) { c.fillStyle = "#5fb3ff"; c.fillRect(Math.max(LM, uX(tl[r[0]].u)), RULER - 3, Math.max(0, uX(tl[r[1]].u + tl[r[1]].len) - Math.max(LM, uX(tl[r[0]].u))), 3); }
+    // ---- playhead ----
+    var px = uX(playhead / song.u);
+    if (px >= LM - 1 && px <= W) { c.fillStyle = "#ff6b6b"; c.fillRect(px, 0, 2, H); }
+    // ---- box selection ----
+    if (drag && drag.mode === "box" && drag.moved) {
+      c.fillStyle = "rgba(95,179,255,.15)"; c.strokeStyle = "#5fb3ff"; c.lineWidth = 1;
+      var bx = Math.min(drag.x0, drag.x1) - sl, by = Math.min(drag.y0, drag.y1) - st, bw = Math.abs(drag.x1 - drag.x0), bh = Math.abs(drag.y1 - drag.y0);
+      c.fillRect(bx, by, bw, bh); c.strokeRect(bx + 0.5, by + 0.5, bw, bh);
     }
-    return null;
+    // ---- key labels (pinned at the left) ----
+    c.save(); c.beginPath(); c.rect(0, RULER, LM, LY - RULER); c.clip();
+    c.font = "9px system-ui"; c.textBaseline = "middle";
+    for (m = mTop; m >= mBot; m--) {
+      c.fillStyle = isBlack(m) ? "#1b2028" : "#2c333e"; c.fillRect(0, midiY(m), LM - 2, ROW - 1);
+      if (m % 12 === 0 || ROW >= 10 || !isBlack(m) && ROW >= 8) { c.fillStyle = m % 12 === 0 ? "#e3e7ee" : "#8a95a5"; c.fillText(T.midiName(m), 4, midiY(m) + ROW / 2); }
+    }
+    c.restore();
+    c.fillStyle = "#232934"; c.fillRect(0, 0, LM - 2, RULER); c.fillRect(0, LY + 1, LM - 2, REST_LANE - 1);
+    c.fillStyle = "#97a1b0"; c.font = "10px system-ui"; c.textBaseline = "middle";
+    c.fillText("bar", 4, RULER / 2); c.fillText("rest", 4, LY + REST_LANE / 2);
+    c.textBaseline = "alphabetic";
   }
-  function itemAtU(u) { for (var i = 0; i < tl.length; i++) if (u >= tl[i].u && u < tl[i].u + tl[i].len) return i; return -1; }
-  var drag = null;
+  // note under a canvas point (in `list`, default the current notes); edge = on its right end
+  function hitNote(p, list) {
+    if (region(p) !== "grid") return null;
+    var u = xU(p.x), m = yMidi(p.y), hit = null;
+    (list || gn.notes).forEach(function (n) {
+      if (n.kind === "n" && n.midi === m && u >= n.u && u < n.u + Math.max(n.l, 0.4)) hit = n;
+    });
+    if (!hit) return null;
+    var xr = uX(hit.u + hit.l);
+    return { n: hit, edge: hit.l > 0 && p.x >= xr - Math.min(7, Math.max(3, hit.l * ppu / 3)) };
+  }
+  function laneItem(p) {
+    var u = xU(p.x);
+    for (var i = 0; i < song.items.length; i++) if (song.items[i].t !== "n" && u >= tl[i].u && u < tl[i].u + Math.max(tl[i].len, 0.4)) return i;
+    return -1;
+  }
+  function copyNote(n, du, dp) { var c = {}; for (var k in n) c[k] = n[k]; c.u = n.u + (du || 0); if (n.kind === "n") c.midi = n.midi + (dp || 0); return c; }
+  function noteItem(n) { return { t: "n", p: T.NAMES[n.midi % 12], o: Math.floor(n.midi / 12) - 1, l: n.l, mk: n.mk || "", br: false }; }
+  // rebuild song.items from grid notes; select the notes in `group`
+  function applyGrid(notes, orig, tail, group) {
+    song.items = T.itemsFromGrid(notes, orig, tail);
+    if (group && group.length) {
+      var a = Infinity, b = -1;
+      group.forEach(function (n) { if (n.ni < a) a = n.ni; if (n.ni > b) b = n.ni; });
+      anchor = a; sel = b;
+    }
+    timeline();
+  }
   function mpos(e) { var b = roll.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; }
+  function playheadTo(t) { playhead = t; drawField(); }
+
+  roll.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  rsc.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   roll.addEventListener("mousedown", function (e) {
-    var p = mpos(e);
-    if (p.y < RULER) { playhead = Math.max(0, xU(p.x)) * song.u; drawRoll(); drawField(); return; }
-    var h = hitItem(p.x, p.y);
-    if (!h) { return; }
-    setSel(h.i, e.shiftKey);
-    playhead = tl[h.i].t; drawField();
-    if (!e.shiftKey) drag = { i: h.i, mode: h.edge ? "len" : "move", x0: p.x, y0: p.y, before: snap(), changed: false };
+    if (testing) return;
+    e.preventDefault();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    var p = mpos(e), reg = region(p), cx = p.x + rsc.scrollLeft, cy = p.y + rsc.scrollTop;
+    hover = null;
+    if (reg === "ruler") {
+      if (e.button !== 0) return;
+      drag = { mode: "scrub" }; playhead = Math.max(0, xU(p.x)) * song.u; drawRoll(); drawField(); return;
+    }
+    if (reg === "keys") { if (e.button === 0) preview(noteItem({ midi: yMidi(p.y), l: 2, mk: "" })); return; }
+    if (reg === "lane") {
+      var li = laneItem(p);
+      if (e.button === 2) { if (li >= 0) commit(function () { song.items.splice(li, 1); setSel(null); }); return; }
+      if (e.button !== 0) return;
+      if (li < 0) { setSel(null); refreshLight(); return; }
+      setSel(li, e.shiftKey); playheadTo(tl[li].t); refreshLight(); return;
+    }
+    var h = hitNote(p);
+    if (e.button === 2) { // right: delete, and keep deleting what the drag passes over
+      drag = { mode: "erase", notes: gn.notes.slice(), orig: song.items, tail: gn.tail, before: snap(), last: p };
+      eraseAlong(p, p); return;
+    }
+    if (e.button !== 0) return;
+    if (e.shiftKey) { drag = { mode: "box", x0: cx, y0: cy, x1: cx, y1: cy, moved: false, start: h ? h.n : null }; return; }
+    var before = snap(), r = selRange();
+    if (h) {
+      var n = h.n, group = [n];
+      if (!h.edge && r && r[1] > r[0] && n.idx >= r[0] && n.idx <= r[1]) group = gn.notes.filter(function (q) { return q.kind === "n" && q.idx >= r[0] && q.idx <= r[1]; });
+      else setSel(n.idx);
+      setNewLen(n.l);
+      playheadTo(tl[n.idx].t);
+      preview(song.items[n.idx]);
+      var base = gn.notes.filter(function (q) { return group.indexOf(q) < 0; });
+      drag = { mode: h.edge ? "len" : "move", group: group, primary: group.indexOf(n), base: base, orig: song.items, tail: gn.tail, cx0: cx, cy0: cy, du: 0, dp: 0, l: n.l, before: before, warned: false };
+      refreshLight(); return;
+    }
+    // empty cell: place a note (last-used length, selected type) and keep dragging it
+    var nn = { kind: "n", u: Math.max(0, Math.floor(xU(p.x))), l: newLen(), midi: yMidi(p.y), mk: $("sNewType").value, br: false };
+    drag = { mode: "move", group: [nn], primary: 0, base: gn.notes.slice(), orig: song.items, tail: gn.tail, cx0: cx, cy0: cy, du: 0, dp: 0, before: before };
+    applyGrid(T.placeOver(drag.base, [copyNote(nn)]), drag.orig, drag.tail, null);
+    var made = gn.notes.filter(function (q) { return q.u === nn.u && q.midi === nn.midi; })[0];
+    if (made) setSel(made.idx);
+    playheadTo(nn.u * song.u);
+    preview(noteItem(nn));
     refreshLight();
   });
-  window.addEventListener("mousemove", function (e) {
-    if (!drag) { var p0 = mpos(e); var hh = (p0.x >= 0 && p0.y >= 0 && p0.x < roll.width && p0.y < roll.height) ? hitItem(p0.x, p0.y) : null; roll.style.cursor = hh ? (hh.edge ? "ew-resize" : "grab") : (p0.y < RULER ? "pointer" : "default"); return; }
-    var p = mpos(e), it = song.items[drag.i];
-    if (drag.mode === "len") {
-      if (it.t === "raw") return;
-      var nl = Math.max(1, Math.min(9, Math.round(xU(p.x) - tl[drag.i].u)));
-      if (nl !== it.l) { it.l = nl; drag.changed = true; timeline(); drawRoll(); }
-    } else {
-      if (it.t === "n" && Math.abs(p.y - drag.y0) > 3) {
-        var m = yMidi(p.y);
-        if (m !== T.itemMidi(it)) { T.setMidi(it, m); drag.changed = true; drawRoll(); preview(it); }
-      }
-      if (Math.abs(p.x - drag.x0) > ppu / 2) {
-        var j = itemAtU(xU(p.x));
-        if (j < 0 && xU(p.x) >= tl.totalU) j = song.items.length - 1;
-        if (j >= 0 && j !== drag.i) {
-          var moved = song.items.splice(drag.i, 1)[0];
-          song.items.splice(j, 0, moved);
-          drag.i = j; setSel(j); drag.changed = true; timeline(); drawRoll();
-        }
-      }
+  function eraseAlong(a, b) {
+    var D = drag, steps = Math.max(1, Math.ceil(Math.max(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) / 3)), hit = false;
+    for (var s = 0; s <= steps; s++) {
+      var q = { x: a.x + (b.x - a.x) * s / steps, y: a.y + (b.y - a.y) * s / steps }, h = hitNote(q, D.notes);
+      if (h) { D.notes.splice(D.notes.indexOf(h.n), 1); hit = true; }
     }
+    if (hit) { applyGrid(D.notes, D.orig, D.tail, null); setSel(null); refreshLight(); }
+    D.last = b;
+  }
+  window.addEventListener("mousemove", function (e) {
+    if (!drag) return;
+    var p = mpos(e), D = drag, cx = p.x + rsc.scrollLeft, cy = p.y + rsc.scrollTop;
+    if (D.mode === "scrub") { playhead = Math.max(0, xU(p.x)) * song.u; drawRoll(); drawField(); return; }
+    if (D.mode === "erase") { eraseAlong(D.last, p); return; }
+    if (D.mode === "box") { D.x1 = cx; D.y1 = cy; if (Math.abs(D.x1 - D.x0) + Math.abs(D.y1 - D.y0) > 4) D.moved = true; drawRoll(); return; }
+    var n0 = D.group[D.primary];
+    if (D.mode === "len") {
+      var want = Math.round(xU(p.x) - n0.u), l = Math.max(1, Math.min(9, want));
+      if (want > 9 && !D.warned) { D.warned = true; toast("A token is at most 9 units long (the file's length digit). For a longer sound add a music-only (x) note of the same pitch right after it."); }
+      if (l === D.l) return;
+      D.l = l; setNewLen(l);
+      var rs = copyNote(n0); rs.l = l;
+      applyGrid(T.placeOver(D.base, [rs]), D.orig, D.tail, [rs]);
+      refreshLight(); return;
+    }
+    // move: snap to whole units / semitones
+    var du = Math.round((cx - D.cx0) / ppu), dp = -Math.round((cy - D.cy0) / ROW), minU = Infinity, lo = 999, hi = -1;
+    D.group.forEach(function (n) { minU = Math.min(minU, n.u); lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
+    du = Math.max(du, -minU); dp = Math.max(PMIN - lo, Math.min(PMAX - hi, dp));
+    if (du === D.du && dp === D.dp) return;
+    var pitch = dp !== D.dp;
+    D.du = du; D.dp = dp;
+    var moved = D.group.map(function (n) { return copyNote(n, du, dp); });
+    applyGrid(T.placeOver(D.base, moved), D.orig, D.tail, moved);
+    playhead = (n0.u + du) * song.u; drawField();
+    if (pitch) preview(song.items[moved[D.primary].ni]);
+    refreshLight();
   });
   window.addEventListener("mouseup", function () {
     if (!drag) return;
-    if (drag.changed) { pushUndo(drag.before); refresh(); }
-    drag = null;
+    var D = drag; drag = null;
+    if (D.mode === "scrub") return;
+    if (D.mode === "box") {
+      if (!D.moved) { if (D.start) { setSel(D.start.idx, true); playheadTo(tl[D.start.idx].t); } refreshLight(); return; }
+      var ua = (Math.min(D.x0, D.x1) - LM) / ppu, ub = (Math.max(D.x0, D.x1) - LM) / ppu;
+      var mHi = PMAX - Math.floor((Math.min(D.y0, D.y1) - RULER) / ROW), mLo = PMAX - Math.floor((Math.max(D.y0, D.y1) - RULER) / ROW);
+      var a = Infinity, b = -1;
+      gn.notes.forEach(function (n) {
+        if (n.kind === "n" && n.midi >= mLo && n.midi <= mHi && n.u < ub && n.u + Math.max(n.l, 0.4) > ua) { a = Math.min(a, n.idx); b = Math.max(b, n.idx); }
+      });
+      if (b < 0) setSel(null); else { anchor = a; sel = b; playheadTo(tl[a].t); }
+      refreshLight(); return;
+    }
+    if (snap() !== D.before) { pushUndo(D.before); refresh(); } else refreshLight();
   });
-  roll.addEventListener("dblclick", function (e) {
-    var p = mpos(e);
-    if (p.y < RULER || hitItem(p.x, p.y)) return;
-    var inLane = p.y >= laneY();
-    var u = xU(p.x), j = itemAtU(u), at;
-    if (j < 0) at = song.items.length; else at = (u - tl[j].u < tl[j].len / 2) ? j : j + 1;
-    commit(function () {
-      var it = inLane ? { t: "r", l: +$("sNewLen").value, br: false } : { t: "n", p: "C", o: 4, l: +$("sNewLen").value, mk: "", br: false };
-      if (!inLane) T.setMidi(it, yMidi(p.y));
-      song.items.splice(at, 0, it); setSel(at);
-    });
-    if (!inLane) preview(song.items[sel]);
+  roll.addEventListener("mousemove", function (e) {
+    if (drag) return;
+    var p = mpos(e), reg = region(p), h = reg === "grid" ? hitNote(p) : null, hv = null;
+    roll.style.cursor = h ? (h.edge ? "ew-resize" : "move") : (reg === "ruler" ? "pointer" : (reg === "grid" ? "crosshair" : "default"));
+    if (reg === "grid" && !h) hv = { u: Math.max(0, Math.floor(xU(p.x))), m: yMidi(p.y) };
+    if (JSON.stringify(hv) !== JSON.stringify(hover)) { hover = hv; drawRoll(); }
   });
-  $("rollWrap").addEventListener("scroll", drawRoll);
-  $("rZoom").addEventListener("input", function () { ppu = +this.value; drawRoll(); });
+  roll.addEventListener("mouseleave", function () { if (hover) { hover = null; drawRoll(); } });
+  roll.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var k = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 300 : 1), dx = e.deltaX * k, dy = e.deltaY * k, p = mpos(e);
+    if (e.ctrlKey || e.metaKey) setZoom(ppu * (dy < 0 ? 1.15 : 1 / 1.15), p.x);
+    else if (e.altKey) setRow(ROW + (dy < 0 ? 1 : -1), p.y);
+    else if (e.shiftKey) rsc.scrollLeft += dy || dx;
+    else { rsc.scrollLeft += dx; rsc.scrollTop += dy; }
+  }, { passive: false });
+  function setZoom(v, px) { // keep the unit under canvas x `px` in place
+    if (px == null) px = LM + (RW - LM) / 2;
+    var uAt = xU(px);
+    ppu = Math.max(4, Math.min(60, Math.round(v))); $("rZoom").value = ppu;
+    sizeRoll(); rsc.scrollLeft = LM + uAt * ppu - px; drawRoll();
+  }
+  function setRow(v, py) {
+    if (py == null) py = (RULER + laneY()) / 2;
+    var f = (py - RULER + rsc.scrollTop) / ROW;
+    ROW = Math.max(6, Math.min(22, Math.round(v))); $("rRow").value = ROW;
+    sizeRoll(); rsc.scrollTop = f * ROW - py + RULER; drawRoll();
+  }
+  function centerRoll(keepX) {
+    sizeRoll();
+    var lo = 200, hi = -1;
+    gn.notes.forEach(function (n) { if (n.kind === "n") { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); } });
+    if (hi < 0) { lo = 60; hi = 72; }
+    rsc.scrollTop = (PMAX - (lo + hi) / 2) * ROW + ROW / 2 - (laneY() - RULER) / 2;
+    if (!keepX) rsc.scrollLeft = 0;
+    drawRoll();
+  }
+  rsc.addEventListener("scroll", function () { drawRoll(); });
+  $("rZoom").addEventListener("input", function () { setZoom(+this.value); });
+  $("rRow").addEventListener("input", function () { setRow(+this.value); });
+  $("bCenter").onclick = function () { centerRoll(true); };
+  if (window.ResizeObserver) new ResizeObserver(function () { drawRoll(); }).observe($("rollBox"));
+  // small hook for automated tests: canvas client coordinates of a grid cell (scrolled into view)
+  window.TXRoll = {
+    cell: function (u, m, frac) {
+      var x = uX(u), y = midiY(m);
+      if (x < LM + 20 || x > RW - 40) rsc.scrollLeft += x - LM - 40;
+      if (y < RULER + 10 || y + ROW > laneY() - 10) rsc.scrollTop += y - (RULER + laneY()) / 2;
+      sizeRoll(); var b = roll.getBoundingClientRect();
+      return { x: b.left + uX(u + (frac == null ? 0.5 : frac)), y: b.top + midiY(m) + ROW / 2 };
+    },
+    ppu: function () { return ppu; },
+    tokens: function () { return song.items.map(T.itemToken).join(" "); },
+    sel: function () { return selRange(); }
+  };
 
   // ---------- inspector ----------
   function opt(v, txt, cur) { return "<option value='" + v + "'" + (String(v) === String(cur) ? " selected" : "") + ">" + txt + "</option>"; }
   function showInsp() {
     var el = $("insp"), r = selRange();
-    if (!r) { el.innerHTML = "<span class=small>Nothing selected. Click a note, or double-click the grid to add one.</span>"; return; }
+    if (!r) { el.innerHTML = "<span class=small>Nothing selected. Left-click an empty cell of the roll to add a note, click a note to select it.</span>"; return; }
     if (r[0] !== r[1]) {
       el.innerHTML = "<b>" + (r[1] - r[0] + 1) + " tokens selected</b> &nbsp; set length <select id=mLen>" + opt("", "-", "") + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (v) { return opt(v, v, ""); }).join("") +
         "</select> type <select id=mType>" + opt("", "-", "") + opt("tap", "tap", "-") + opt("h", "hold", "-") + opt("s", "slider", "-") + opt("x", "music only", "-") + "</select>";
@@ -1049,7 +1294,12 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
       ul.appendChild(li);
     });
   }
-  function scrollTo(i) { var w = $("rollWrap"), x = uX(tl[i] ? tl[i].u : 0); if (x < w.scrollLeft + 60 || x > w.scrollLeft + w.clientWidth - 60) w.scrollLeft = x - w.clientWidth / 3; }
+  function scrollTo(i) {
+    var s = tl[i]; if (!s) return;
+    var x = uX(s.u); if (x < LM + 30 || x > RW - 60) rsc.scrollLeft += x - (LM + (RW - LM) / 3);
+    var it = song.items[i];
+    if (it && it.t === "n") { var y = midiY(T.itemMidi(it)); if (y < RULER || y + ROW > laneY()) rsc.scrollTop += y - (RULER + laneY()) / 2; }
+  }
 
   // ---------- field ----------
   var fcv = $("field"), fctx = fcv.getContext("2d"), scr = new T.Screen(), off = document.createElement("canvas");
@@ -1145,8 +1395,8 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     var P = playing, T0 = P.from + (actx.currentTime - P.t0) * P.speed;
     if (T0 >= P.b) { if (P.loop) { startCycle(P.a); T0 = P.a; } else { stop(); return; } }
     playhead = Math.max(P.from, T0);
-    var w = $("rollWrap"), x = uX(playhead / song.u);
-    if (x > w.scrollLeft + w.clientWidth - 40 || x < w.scrollLeft) w.scrollLeft = x - 60;
+    var x = uX(playhead / song.u);
+    if (x > RW - 40 || x < LM) rsc.scrollLeft += x - LM - 60;
     drawRoll(); drawField();
     requestAnimationFrame(tick);
   }
@@ -1202,6 +1452,12 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     if (tg === "INPUT" || tg === "TEXTAREA" || tg === "SELECT") return;
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
     if ((e.ctrlKey || e.metaKey) && e.code === "KeyY") { e.preventDefault(); return redo(); }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      if (e.code === "KeyC") { e.preventDefault(); return copySel(); }
+      if (e.code === "KeyX") { e.preventDefault(); if (copySel()) clearSel(); return; }
+      if (e.code === "KeyV") { e.preventDefault(); return pasteClip(); }
+      if (e.code === "KeyA") { e.preventDefault(); if (song.items.length) { anchor = 0; sel = song.items.length - 1; refreshLight(); } return; }
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var it = sel !== null ? song.items[sel] : null, k = e.key;
     if (e.code === "Space") { e.preventDefault(); play(); }
@@ -1213,7 +1469,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     else if (k.toLowerCase() === "n") addAfter(false);
     else if (k.toLowerCase() === "r") addAfter(true);
     else if (k.toLowerCase() === "b" && it) commit(function () { it.br = !it.br; });
-    else if ((k === "Delete" || k === "Backspace") && sel !== null) { e.preventDefault(); delSel(); }
+    else if ((k === "Delete" || k === "Backspace") && sel !== null) { e.preventDefault(); clearSel(); }
     else if (k === "Escape") { setSel(null); refreshLight(); drawField(); }
   });
   window.addEventListener("keyup", function (e) { if (e.code === "KeyZ" || e.code === "Space") keys.sa = false; if (e.code === "KeyX") keys.sd = false; });
@@ -1228,12 +1484,46 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     });
   }
   function delSel() { var r = selRange(); if (!r) return; commit(function () { song.items.splice(r[0], r[1] - r[0] + 1); setSel(Math.min(r[0], song.items.length - 1)); }); }
+  // Delete: take the selected notes out and leave silence (later notes keep their time);
+  // a selection without notes (rests / invalid tokens) is removed, closing the gap
+  function clearSel() {
+    var r = selRange(); if (!r) return;
+    var hasNote = song.items.slice(r[0], r[1] + 1).some(function (it) { return it.t === "n"; });
+    if (!hasNote) return delSel();
+    commit(function () {
+      var keep = gn.notes.filter(function (n) { return n.kind !== "n" || n.idx < r[0] || n.idx > r[1]; });
+      applyGrid(keep, song.items, gn.tail, null); setSel(null);
+    });
+  }
+  function copySel() {
+    var r = selRange(); if (!r) { toast("Select notes first."); return false; }
+    clip = JSON.parse(JSON.stringify(song.items.slice(r[0], r[1] + 1)));
+    clip.forEach(function (it) { it.br = false; });
+    var txt = clip.map(T.itemToken).join(" ");
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function () { /* internal clipboard still works */ }); } catch (e) { /* ignore */ }
+    toast("Copied " + clip.length + " token(s): " + (txt.length > 60 ? txt.slice(0, 60) + "…" : txt));
+    return true;
+  }
+  // paste after the selection (or at the playhead), overwriting that stretch of the song
+  function pasteClip() {
+    if (!clip || !clip.length) return toast("Nothing copied yet (Ctrl+C).");
+    var r = selRange(), at = r ? tl[r[1]].u + tl[r[1]].len : Math.max(0, Math.round(playhead / song.u));
+    commit(function () {
+      var c = T.gridNotes(clip), add = c.notes.map(function (n) { var q = copyNote(n, at, 0); q.br = false; return q; });
+      var base = T.clearSpan(gn.notes, at, at + c.total), all = base.concat(add);
+      var end = Math.max(gn.total, at + c.total), tail = Math.max(0, end - T.lastEnd(all));
+      applyGrid(all, song.items, tail, add.length ? add : null);
+      if (!add.length) setSel(null);
+    });
+    if (sel !== null) { playhead = tl[anchor].t; scrollTo(anchor); drawField(); }
+  }
   function undo() { if (!undoS.length) return; redoS.push(snap()); restore(undoS.pop()); refresh(); }
   function redo() { if (!redoS.length) return; undoS.push(snap()); restore(redoS.pop()); refresh(); }
   $("bUndo").onclick = undo; $("bRedo").onclick = redo;
   $("bAddN").onclick = function () { addAfter(false); };
   $("bAddR").onclick = function () { addAfter(true); };
-  $("bDel").onclick = delSel;
+  $("bDel").onclick = clearSel;
+  $("bCut").onclick = delSel;
   $("bDup").onclick = function () { var r = selRange(); if (!r) return; commit(function () { var c = JSON.parse(JSON.stringify(song.items.slice(r[0], r[1] + 1))); Array.prototype.splice.apply(song.items, [r[1] + 1, 0].concat(c)); sel = r[1] + c.length; anchor = r[1] + 1; }); };
   Array.prototype.forEach.call(document.querySelectorAll("[data-tr]"), function (b) {
     b.onclick = function () { var n = +b.getAttribute("data-tr"), all = $("sTrScope").value === "all"; if (!all && sel === null) return toast("Select notes first (or choose whole song)."); commit(function () { T.transpose(all ? song.items : selItems(), n); }); };
@@ -1292,7 +1582,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     if (s.uMissing) msg.push("u missing (game default 0.25)");
     if (s.aMissing) msg.push("a missing (game default 1.4)");
     pushUndo(); song = s; if (n) slot = n; setSel(null); playhead = -song.a;
-    refresh();
+    refresh(); centerRoll();
     toast("Loaded " + (label || song.name) + (msg.length ? " - " + msg.join(", ") : ""));
   }
   BUILTIN.forEach(function (b, i) { $("bBuiltin").insertAdjacentHTML("beforeend", "<option value='" + i + "'>s" + b.n + ".lua - " + (T.parseSong(b.text).name) + "</option>"); });
@@ -1307,7 +1597,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
   $("bPaste").onclick = function () { $("pasteDlg").style.display = "block"; $("tPaste").focus(); };
   $("bPasteCancel").onclick = function () { $("pasteDlg").style.display = "none"; };
   $("bPasteOk").onclick = function () { $("pasteDlg").style.display = "none"; load($("tPaste").value, null, "pasted song"); };
-  $("bNew").onclick = function () { pushUndo(); song = T.newSong(); slot = 6; setSel(null); playhead = 0; refresh(); };
+  $("bNew").onclick = function () { pushUndo(); song = T.newSong(); slot = 6; setSel(null); playhead = 0; refresh(); centerRoll(); };
   $("bExport").onclick = function () {
     var txt = T.exportSong(song), a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
@@ -1321,7 +1611,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast("Copied s" + slot + ".lua text."); }, fallback); else fallback();
   };
   $("bPlay").onclick = play;
-  $("bHome").onclick = function () { playhead = -song.a; $("rollWrap").scrollLeft = 0; drawRoll(); drawField(); };
+  $("bHome").onclick = function () { playhead = -song.a; rsc.scrollLeft = 0; drawRoll(); drawField(); };
   $("bTest").onclick = startTest;
   window.addEventListener("resize", drawRoll);
 
@@ -1333,7 +1623,7 @@ var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Tw
     if (BUILTIN.length) { song = T.parseSong(BUILTIN[0].text); slot = BUILTIN[0].n; } else { song = T.newSong(); slot = 6; }
   }
   playhead = -song.a;
-  refresh();
+  refresh(); centerRoll();
 })();
 </script>
 </body>
