@@ -17,6 +17,7 @@ local KNOWN = {
 }
 
 local games, sel, top, game, err
+local peak, lastPeak, lastName  -- Lua heap in KB while a game runs
 
 local function prettyName(file)
   local name = string.gsub(file, "%.lua$", "")
@@ -62,6 +63,7 @@ local function init()
 end
 
 local function stopGame()
+  if game then lastPeak, lastName = peak, game.name end
   game = nil
   collectgarbage()
 end
@@ -77,6 +79,8 @@ local function startGame(entry)
   end)
   if ok and result and result.run then
     game = result
+    game.name = entry.name
+    peak = collectgarbage("count")
     err = nil
   else
     err = entry.name .. ": " .. string.gsub(tostring(result), DIR, "")
@@ -101,7 +105,16 @@ local function drawMenu()
   lcd.clear()
   lcd.drawFilledRectangle(0, 0, LCD_W, 9)
   lcd.drawText(2, 1, "GAMES", SMLSIZE + INVERS)
-  lcd.drawText(LCD_W - 2, 1, #games .. " games", SMLSIZE + INVERS + RIGHT)
+  local info
+  if lastPeak then
+    info = lastName .. " peak " .. math.floor(lastPeak) .. "K"
+  else
+    info = math.floor(collectgarbage("count")) .. "K used"
+    if getAvailableMemory then
+      info = info .. " " .. math.floor(getAvailableMemory() / 1024) .. "K free"
+    end
+  end
+  lcd.drawText(LCD_W - 2, 1, info, SMLSIZE + INVERS + RIGHT)
   if #games == 0 then
     lcd.drawText(2, 20, "No games in", SMLSIZE)
     lcd.drawText(2, 30, DIR, SMLSIZE)
@@ -125,6 +138,8 @@ local function run(event)
       return 0
     end
     local ok, result = pcall(game.run, event)
+    local kb = collectgarbage("count")
+    if game and kb > peak then peak = kb end
     if not ok then
       err = (string.gsub(tostring(result), DIR, ""))
       stopGame()

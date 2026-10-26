@@ -321,15 +321,18 @@ local function drawPac()
   local x, y = pixelPos(pac)
   x, y = math.floor(x + 1.5), math.floor(y + 1.5)
   local open = (anim % 4) < 2
-  local d = DIRS[pac.dir]
+  -- no table lookup here: on the TX12 DIRS[pac.dir] came back nil
+  local mx, my = -1, 0
+  if pac.dir == 1 then mx = 1 elseif pac.dir == 3 then mx, my = 0, -1
+  elseif pac.dir == 4 then mx, my = 0, 1 end
   for dy = -1, 1 do
     for dx = -1, 1 do
-      local mouth = open and (dx == d[1] and dy == d[2])
+      local mouth = open and (dx == mx and dy == my)
       if not mouth then lcd.drawPoint(x + dx, y + dy) end
     end
   end
   if open then
-    lcd.drawPoint(x - d[1] - d[2], y - d[2] - d[1])
+    lcd.drawPoint(x - mx - my, y - my - mx)
   end
 end
 
