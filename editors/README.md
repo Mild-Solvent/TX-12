@@ -1,6 +1,6 @@
 # Level and song editors
 
-Two editors that run in your browser. Double-click the `.html` file to open it: no install, no internet needed.
+Three tools that run in your browser. Double-click the `.html` file to open it: no install, no internet needed.
 Your work is saved in the browser as a draft, but always **export** the file when you're done.
 
 | Editor | Makes | Goes on the SD card at |
@@ -56,7 +56,7 @@ same song gets a different layout as `s6` than as `s7`. The editor's preview sho
 
 1. Open `audio-to-tune.html` and drop in an audio file (mp3, wav, ogg, m4a, flac) or a MIDI file (`.mid`).
 2. Drag over the waveform to pick the part you want; the radio can't hold a whole song, so 20-40 s works well.
-3. **Convert.** Check the BPM (use x2 / ÷2 if it's twice too fast or slow) and press **A/B** to compare the
+3. **Convert.** Check the BPM (use x2 / half if it's twice too fast or slow) and press **A/B** to compare the
    original with the beeper version.
 4. For **MIDI**, pick the melody track, or "highest note" across all tracks. MIDI converts almost exactly.
 5. Export:
