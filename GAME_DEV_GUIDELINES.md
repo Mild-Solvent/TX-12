@@ -155,6 +155,21 @@ defensively around table lookups.
 - **Dino reset the radio once** (dropped to the main screen, battery read 0.5 V for a moment). Cause not proven;
   Dino now clips all drawing and caps its lists.
 
+## Memory budget (measured)
+
+`tools/memcheck/` runs a game in stock Lua 5.2 with random input and reports its heap. Build Lua once and run it
+on Linux (the devbox):
+
+```sh
+cd tools/memcheck && sh build-lua.sh
+lua52/src/lua memcheck.lua ../../My_TX-12/SCRIPTS/GAMES Game-Racer.lua 4000
+```
+
+`live` is the heap after a full garbage collection, the number that has to fit. It's measured on a 64-bit PC,
+roughly twice what the 32-bit radio uses, so compare games with each other, not with the radio's free-memory
+figure. Reference: **Asteroids, a stock game that runs fine on the TX12, measures 70 KB live.** Keep every game
+below that, ideally under 60 KB, and keep the picker or menu of a game well under it.
+
 ## Testing before copying to the card
 
 `tools/tx12sim/run.js` runs every game under [fengari](https://github.com/fengari-lua/fengari)
