@@ -2,8 +2,8 @@
 ---------------------------------------------------------------
 -- Space Invaders for 128x64 B&W EdgeTX radios (TX12, Zorro, X7)
 --
--- Move:  aileron (right stick left/right)
--- Fire:  ENTER (wheel press) or right stick up
+-- Move:  either stick left/right
+-- Fire:  SA or SD, or ENTER (wheel press)
 -- Exit:  RTN / EXIT
 ---------------------------------------------------------------
 
@@ -114,9 +114,11 @@ local function loseLife()
 end
 
 local function update(dt, fire)
-  local ail = getValue("ail")
-  if math.abs(ail) > 100 then
-    px = px + ail / 1024 * 70 * dt
+  local x = getValue("ail")
+  local rud = getValue("rud")
+  if math.abs(rud) > math.abs(x) then x = rud end
+  if math.abs(x) > 100 then
+    px = px + x / 1024 * 70 * dt
   end
   if px < 0 then px = 0 end
   if px > LCD_W - PW then px = LCD_W - PW end
@@ -174,7 +176,7 @@ local function update(dt, fire)
     if b.y >= PY and b.y < PY + PH and b.x >= px and b.x < px + PW then
       removeAt(bombs, i)
       loseLife()
-      if state ~= "play" then return end
+      return  -- loseLife() cleared bombs
     elseif b.y > LCD_H then
       removeAt(bombs, i)
     end
@@ -230,8 +232,25 @@ local function draw()
   end
 end
 
-local function stickFire()
-  return getValue("ele") > 600
+-- true once per press of switch SA or SD. Works for buttons and toggles:
+-- a switch left in a new position for 0.5 s counts as its new rest.
+local SWITCHES = { "sa", "sd" }
+local swLast, swRest, swSince = {}, {}, {}
+local function switchPress()
+  local now = getTime()
+  local pressed = false
+  for _, n in ipairs(SWITCHES) do
+    local v = getValue(n)
+    if swLast[n] == nil then
+      swLast[n], swRest[n], swSince[n] = v, v, now
+    elseif v ~= swLast[n] then
+      if v ~= swRest[n] then pressed = true end
+      swLast[n], swSince[n] = v, now
+    elseif v ~= swRest[n] and now - swSince[n] > 50 then
+      swRest[n] = v
+    end
+  end
+  return pressed
 end
 
 local function run(event)
@@ -244,7 +263,7 @@ local function run(event)
   lastTime = now
   if dt > 0.1 then dt = 0.1 end
 
-  local fire = (event == EVT_VIRTUAL_ENTER) or stickFire()
+  local fire = (event == EVT_VIRTUAL_ENTER) or switchPress()
 
   if state == "title" then
     draw()

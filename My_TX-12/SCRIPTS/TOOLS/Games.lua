@@ -68,7 +68,8 @@ end
 
 local function startGame(entry)
   local ok, result = pcall(function()
-    local chunk = loadScript(DIR .. entry.file)
+    -- "d" keeps line numbers in error messages
+    local chunk = loadScript(DIR .. entry.file, "Td") or loadScript(DIR .. entry.file)
     if not chunk then error("load failed") end
     local g = chunk()
     if g.init then g.init() end

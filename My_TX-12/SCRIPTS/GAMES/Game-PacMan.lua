@@ -129,14 +129,16 @@ end
 
 local function eatAt(c, r)
   c = (c - 1) % MW + 1
-  local ch = maze[r][c]
+  local row = maze[r]
+  if not row then return end
+  local ch = row[c]
   if ch == "." then
-    maze[r][c] = " "
+    row[c] = " "
     score = score + 10
     dotsLeft = dotsLeft - 1
     if anim % 2 == 0 then playTone(900, 15, 0, PLAY_NOW) end
   elseif ch == "o" then
-    maze[r][c] = " "
+    row[c] = " "
     score = score + 50
     dotsLeft = dotsLeft - 1
     frightTime = math.max(2, 7 - level)
@@ -216,7 +218,7 @@ local function chooseGhostDir(g)
     local dist = dc * dc + dr * dr
     if dist < bestD then best, bestD = i, dist end
   end
-  g.dir = best
+  if best then g.dir = best end
 end
 
 local function moveGhost(g, dt)

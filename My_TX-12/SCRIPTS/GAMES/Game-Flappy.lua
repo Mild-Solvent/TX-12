@@ -2,7 +2,7 @@
 ---------------------------------------------------------------
 -- Flappy bird for 128x64 B&W EdgeTX radios (TX12, Zorro, X7)
 --
--- Flap:  ENTER (wheel press) or flick right stick up
+-- Flap:  SA or SD, ENTER (wheel press), or flick right stick up
 -- Exit:  RTN / EXIT
 ---------------------------------------------------------------
 
@@ -46,6 +46,27 @@ local function init()
   stickArmed = true
   lastTime = getTime()
   reset()
+end
+
+-- true once per press of switch SA or SD. Works for buttons and toggles:
+-- a switch left in a new position for 0.5 s counts as its new rest.
+local SWITCHES = { "sa", "sd" }
+local swLast, swRest, swSince = {}, {}, {}
+local function switchPress()
+  local now = getTime()
+  local pressed = false
+  for _, n in ipairs(SWITCHES) do
+    local v = getValue(n)
+    if swLast[n] == nil then
+      swLast[n], swRest[n], swSince[n] = v, v, now
+    elseif v ~= swLast[n] then
+      if v ~= swRest[n] then pressed = true end
+      swLast[n], swSince[n] = v, now
+    elseif v ~= swRest[n] and now - swSince[n] > 50 then
+      swRest[n] = v
+    end
+  end
+  return pressed
 end
 
 -- true once per stick flick (stick must return to center before next flap)
@@ -131,12 +152,12 @@ local function run(event)
   lastTime = now
   if dt > 0.1 then dt = 0.1 end
 
-  local flap = (event == EVT_VIRTUAL_ENTER) or stickFlap()
+  local flap = (event == EVT_VIRTUAL_ENTER) or switchPress() or stickFlap()
 
   if state == "title" then
     draw()
     lcd.drawText(LCD_W / 2 - 22, 14, "FLAPPY", MIDSIZE + INVERS)
-    lcd.drawText(LCD_W / 2 - 40, 34, "ENTER or stick up", SMLSIZE)
+    lcd.drawText(LCD_W / 2 - 40, 34, "SA / SD or ENTER", SMLSIZE)
     if flap then
       reset()
       state = "play"
