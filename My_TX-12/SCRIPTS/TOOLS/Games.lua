@@ -10,6 +10,12 @@
 local DIR = "/SCRIPTS/GAMES/"
 local ROWS = 6
 
+local KNOWN = {
+  "Game-2048.lua", "Game-Asteroids.lua", "Game-Breakout.lua", "Game-Flappy.lua",
+  "Game-Invaders.lua", "Game-PacMan.lua", "Game-Pinball.lua", "Game-Pong.lua",
+  "Game-Simulator.lua", "Game-Snake.lua", "Game-X-Tris.lua",
+}
+
 local games, sel, top, game, err
 
 local function prettyName(file)
@@ -20,14 +26,25 @@ end
 
 local function scan()
   games = {}
+  -- dir() finds nothing when the path ends in "/"
   local ok = pcall(function()
-    for file in dir(DIR) do
-      if string.match(file, "%.lua$") then
+    for file in dir(string.sub(DIR, 1, -2)) do
+      if string.match(string.lower(file), "%.lua$") then
         games[#games + 1] = { file = file, name = prettyName(file) }
       end
     end
   end)
-  if not ok then err = "Cannot read " .. DIR end
+  if #games == 0 then
+    -- fall back to the bundled games if the folder can't be listed
+    for _, file in ipairs(KNOWN) do
+      local f = io.open(DIR .. file, "r")
+      if f then
+        io.close(f)
+        games[#games + 1] = { file = file, name = prettyName(file) }
+      end
+    end
+  end
+  if not ok and #games == 0 then err = "Cannot read " .. DIR end
   -- insertion sort: EdgeTX on B&W radios has no table library
   for i = 2, #games do
     local g, j = games[i], i - 1
