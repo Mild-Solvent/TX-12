@@ -7,6 +7,7 @@ Your work is saved in the browser as a draft, but always **export** the file whe
 |---|---|---|
 | `geodash-editor.html` | Geometry Dash levels `L<n>.lua` | `/SCRIPTS/GAMES/GDASH/` |
 | `rhythm-editor.html` | Rhythm songs `s<n>.lua` | `/SCRIPTS/GAMES/RHYTHM/` |
+| `audio-to-tune.html` | Turns an audio or MIDI file into a beeper melody: a ready Rhythm song, or a tune for a Geometry Dash level | (see below) |
 
 ## How the games find levels and songs
 
@@ -50,6 +51,21 @@ So adding a level or song **never needs a change to the game**. Two rules:
 
 Circle positions aren't stored in the song file: the game places them itself, seeded by the file number, so the
 same song gets a different layout as `s6` than as `s7`. The editor's preview shows the layout for the number you set.
+
+## Turn a song into a tune (no composing)
+
+1. Open `audio-to-tune.html` and drop in an audio file (mp3, wav, ogg, m4a, flac) or a MIDI file (`.mid`).
+2. Drag over the waveform to pick the part you want; the radio can't hold a whole song, so 20-40 s works well.
+3. **Convert.** Check the BPM (use x2 / ÷2 if it's twice too fast or slow) and press **A/B** to compare the
+   original with the beeper version.
+4. For **MIDI**, pick the melody track, or "highest note" across all tracks. MIDI converts almost exactly.
+5. Export:
+   - **Rhythm song:** set the name, difficulty, file number and chart density, then **Download s<n>.lua**. It's
+     ready for the card, or open it in `rhythm-editor.html` to tidy it up.
+   - **Geometry Dash tune:** copy `u` and the token string into the level editor's **Music** tab.
+
+Full band recordings (vocals, drums, chords together) give a rough melody that usually needs some clean-up in the
+Rhythm editor. Solo melodies and MIDI files come out clean.
 
 ## Copy to the radio
 
