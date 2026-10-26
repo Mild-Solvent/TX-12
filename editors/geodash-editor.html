@@ -1,0 +1,1732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GDash Level Editor</title>
+<style>
+:root {
+  --bg: #1d2024; --panel: #272b31; --panel2: #30353c; --line: #444b55; --text: #e6e8eb; --dim: #9aa3ad;
+  --accent: #5fb3ff; --bad: #ff6b6b; --warn: #ffb547; --good: #6fdc8c;
+  --lcd-bg: #e9ecdf; --lcd-px: #15171a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+button, select, input, textarea { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; }
+button { padding: 4px 9px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent); color: #0b1520; border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+input, select { padding: 3px 6px; }
+input[type=number] { width: 64px; }
+textarea { width: 100%; padding: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+label { color: var(--dim); }
+h1 { font-size: 15px; margin: 0; letter-spacing: .5px; }
+h3 { margin: 10px 0 6px; font-size: 13px; }
+code, .mono { font-family: ui-monospace, Consolas, monospace; }
+.bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+header { padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+#meta { padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; border-bottom: 1px solid var(--line); }
+#stats { color: var(--dim); }
+#main { display: flex; gap: 10px; padding: 10px 12px; align-items: flex-start; }
+#palette { width: 190px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+#palette .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.tilebtn { display: flex; align-items: center; gap: 5px; padding: 3px 4px; text-align: left; font-size: 11px; line-height: 1.15; }
+.tilebtn canvas { flex: none; image-rendering: pixelated; background: var(--lcd-bg); border-radius: 2px; }
+.tilebtn b { font-family: ui-monospace, Consolas, monospace; }
+#palette .tools { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+#tileinfo { margin-top: 8px; color: var(--dim); font-size: 12px; min-height: 48px; }
+#edcol { flex: 1; min-width: 0; }
+#edwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+#ed { display: block; width: 100%; cursor: crosshair; image-rendering: pixelated; }
+#scroller { overflow-x: auto; overflow-y: hidden; height: 16px; margin-top: 2px; }
+#scroller div { height: 1px; }
+#status { color: var(--dim); margin-top: 4px; min-height: 18px; }
+#previewbox { margin-top: 8px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+canvas.lcd { image-rendering: pixelated; border: 2px solid #0b0c0e; border-radius: 4px; background: var(--lcd-bg); }
+#tabs { padding: 0 12px; display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+#tabs button { border-radius: 6px 6px 0 0; border-bottom: none; }
+.panel { display: none; padding: 10px 12px 30px; }
+.panel.show { display: block; }
+.cols { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.note { background: var(--panel); border-left: 3px solid var(--accent); padding: 8px 10px; border-radius: 4px; margin: 8px 0; max-width: 820px; }
+.note.warn { border-left-color: var(--warn); }
+.ok { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+table.list { border-collapse: collapse; font-size: 12px; }
+table.list td, table.list th { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+table.list tr.tight td { color: var(--bad); }
+table.list tr:hover td { background: var(--panel2); cursor: pointer; }
+#presslist { max-height: 300px; overflow: auto; }
+#roll { display: block; background: #15181c; border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+#rollwrap { overflow-x: auto; max-width: 100%; }
+#help li { margin: 3px 0; }
+.kbd { font-family: ui-monospace, Consolas, monospace; background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+#toast { position: fixed; bottom: 14px; right: 14px; background: var(--panel2); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 6px; display: none; max-width: 420px; z-index: 9; }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: min(760px, 92vw); }
+dialog::backdrop { background: rgba(0,0,0,.5); }
+@media (max-width: 760px) { #main { flex-direction: column; } #palette { width: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>TX12 GEOMETRY DASH &middot; LEVEL EDITOR</h1>
+  <div class="bar">
+    <button id="bNew" title="Start a new empty level">New</button>
+    <button id="bOpen" title="Load a GDASH/L&lt;n&gt;.lua file">Open .lua&hellip;</button>
+    <input id="fileIn" type="file" accept=".lua,.txt" hidden>
+    <button id="bPaste" title="Paste the text of a level file">Paste text&hellip;</button>
+    <select id="bundled" title="Built-in copies of the game's levels (snapshot taken when this editor was built)"><option value="">Open bundled level&hellip;</option></select>
+    <button id="bUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="bRedo" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="bDownload" title="Download L&lt;n&gt;.lua">Download .lua</button>
+    <button id="bCopyOut" title="Copy the level file text">Copy .lua</button>
+  </div>
+</header>
+
+<div id="meta">
+  <span><label>Level file L</label><input id="fNum" type="number" min="1" max="99" value="9">.lua</span>
+  <span><label>Name </label><input id="fName" maxlength="40" size="16"></span>
+  <span><label>Difficulty </label><input id="fDiff" list="diffs" maxlength="20" size="8"></span>
+  <datalist id="diffs"><option>Easy</option><option>Normal</option><option>Hard</option><option>Harder</option><option>Insane</option><option>Demon</option></datalist>
+  <span><label>Length </label><input id="fW" type="number" min="1" max="4000"> <label>columns</label></span>
+  <span id="stats"></span>
+</div>
+
+<div id="main">
+  <aside id="palette">
+    <div class="tiles" id="tiles"></div>
+    <div class="tools">
+      <button id="tPaint" class="on" title="Left drag paints, right drag erases">Paint</button>
+      <button id="tSelect" title="Drag to select (or hold Shift while dragging)">Select</button>
+      <button id="bCopy" title="Ctrl+C">Copy</button>
+      <button id="bCut" title="Ctrl+X">Cut</button>
+      <button id="bPasteSel" title="Ctrl+V: paste with the bottom-left corner on the cell under the mouse (or the selection start)">Paste</button>
+      <button id="bClearSel" title="Delete key">Clear sel.</button>
+      <button id="bInsCol" title="Insert N empty columns before the selection / mouse column">Insert cols</button>
+      <button id="bDelCol" title="Delete the selected columns (or N columns at the mouse)">Delete cols</button>
+    </div>
+    <div class="bar" style="margin-top:6px"><label>N</label><input id="fN" type="number" min="1" max="200" value="1">
+      <label title="Paste leaves cells under empty clipboard cells unchanged"><input id="fTransp" type="checkbox"> transparent paste</label></div>
+    <div class="bar" style="margin-top:6px"><label>Zoom</label><select id="fZoom"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+      <label><input id="fGrid" type="checkbox" checked> grid</label></div>
+    <div id="tileinfo"></div>
+  </aside>
+  <div id="edcol">
+    <div id="edwrap">
+      <canvas id="ed" height="272"></canvas>
+      <div id="scroller"><div id="spacer"></div></div>
+    </div>
+    <div id="status">&nbsp;</div>
+    <div id="previewbox">
+      <div><div><label>Radio view 128&times;64 at the mouse column (cube at screen x 28)</label></div>
+        <canvas id="pv" class="lcd" width="256" height="128"></canvas></div>
+      <div id="overlayinfo" style="max-width:420px;color:var(--dim)"></div>
+    </div>
+  </div>
+</div>
+
+<nav id="tabs">
+  <button data-tab="play" class="on">Play-test</button>
+  <button data-tab="solve">Check beatable</button>
+  <button data-tab="music">Music</button>
+  <button data-tab="export">Export</button>
+  <button data-tab="help">Help</button>
+</nav>
+
+<section class="panel show" id="p-play">
+  <div class="cols">
+    <div>
+      <canvas id="pc" class="lcd" width="512" height="256" tabindex="0"></canvas>
+      <div class="bar" style="margin-top:6px">
+        <button id="bPlay">Play</button>
+        <button id="bPrac">Play practice</button>
+        <button id="bStop">Stop</button>
+        <button id="bWatch" title="Plays back the press list found by Check beatable">Watch solver run</button>
+        <label>speed <select id="fSpeed"><option value="1">100%</option><option value="0.5">50%</option><option value="0.25">25%</option></select></label>
+        <label><input id="fPlayMusic" type="checkbox" checked> music</label>
+      </div>
+    </div>
+    <div style="max-width:440px">
+      <div id="playinfo" class="note">Press <b>Play</b>. Jump: <span class="kbd">Space</span> / <span class="kbd">&uarr;</span> / <span class="kbd">W</span> / <span class="kbd">Enter</span> or click the screen.</div>
+      <div class="note">Same physics as <code>GDASH/phys.lua</code>: fixed 20 ms steps, a press is remembered for 120 ms, one press per key-down (holding does nothing, like SA/SD on the radio).
+      Practice: <span class="kbd">C</span> = checkpoint (only while on the ground, max 30), <span class="kbd">X</span> = remove last. <span class="kbd">R</span> = restart, <span class="kbd">Esc</span> = stop.
+      Deaths are marked with a red &times; in the editor.</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p-solve">
+  <div class="bar">
+    <button id="bSolve">Check beatable</button>
+    <button id="bSolveStop" disabled>Cancel</button>
+    <label>min. gap between presses <input id="fGap" type="number" min="1" max="20" value="5"> steps (&times;20 ms)</label>
+    <label>flag windows under <input id="fTight" type="number" min="20" max="200" step="20" value="60"> ms</label>
+    <label><input id="fTrace" type="checkbox" checked> show path</label>
+  </div>
+  <div id="solveout" class="note">Port of <code>tools/gdash/solve.js</code>: breadth-first search over press times on the 20 ms physics grid (states merged by position/speed/gravity/mode, at most 3000 kept per step, presses at least 100 ms apart), then every press of the found run is moved &plusmn;1..5 steps to measure its window (the shifted run must survive 2 more seconds).</div>
+  <div id="presslist"></div>
+</section>
+
+<section class="panel" id="p-music">
+  <div class="bar">
+    <button id="bMPlay">Play</button><button id="bMStop">Stop</button>
+    <label><input id="fLoop" type="checkbox" checked> loop</label>
+    <label>u = <input id="fU" type="text" size="5"> s per unit</label>
+    <span id="mInfo" style="color:var(--dim)"></span>
+  </div>
+  <div id="rollwrap" style="margin-top:8px"><canvas id="roll" width="900" height="220"></canvas></div>
+  <div class="bar" style="margin-top:6px">
+    <button id="mAdd" title="Insert a note after the selected one">+ note</button>
+    <button id="mRest" title="Insert a rest after the selected one">+ rest</button>
+    <button id="mDel">Delete</button>
+    <button id="mLm">Length &minus;</button><button id="mLp">Length +</button>
+    <button id="mDn">Pitch &minus;</button><button id="mUp">Pitch +</button>
+    <button id="mOdn">Octave &minus;</button><button id="mOup">Octave +</button>
+    <button id="mLeft">&larr; Move</button><button id="mRight">Move &rarr;</button>
+    <span id="mSel" class="mono" style="color:var(--dim)"></span>
+  </div>
+  <h3>Tune text (<code>m</code>)</h3>
+  <textarea id="fM" rows="3" spellcheck="false"></textarea>
+  <div id="mErr" style="margin-top:4px"></div>
+  <div class="note">Format (from <code>phys.lua</code>): tokens separated by spaces. A note is <code>&lt;letter&gt;[#]&lt;octave digit&gt;&lt;length digit&gt;</code>, e.g. <code>C42</code> = C4 for 2 units, <code>A#31</code> = A#3 for 1 unit. <code>R&lt;n&gt;</code> = rest of n units. One unit lasts <code>u</code> seconds. The tune loops and restarts with every attempt. Sharps only (no flats). Anything else plays as a 1-unit rest on the radio.
+  Piano roll: click a note to select it, click in its column at another height to set its pitch, right-click to turn it into a rest, mouse wheel = length. Keyboard when the roll is focused: arrows = pitch / select, <span class="kbd">+</span>/<span class="kbd">-</span> = length, <span class="kbd">Del</span>.</div>
+</section>
+
+<section class="panel" id="p-export">
+  <div class="bar"><button id="bDownload2">Download L?.lua</button><button id="bCopy2">Copy to clipboard</button><span id="expinfo" style="color:var(--dim)"></span></div>
+  <div id="expwarn"></div>
+  <textarea id="expText" rows="16" readonly spellcheck="false" style="margin-top:6px"></textarea>
+  <div class="note">
+    <b>Putting it on the radio</b>
+    <ol style="margin:4px 0 0 18px;padding:0">
+      <li>Copy the file to the SD card as <code id="sdpath">/SCRIPTS/GAMES/GDASH/L9.lua</code>.</li>
+      <li>Delete any <code id="sdluac">L9.luac</code> next to it, or the radio keeps running the old compiled copy.</li>
+      <li>The game finds levels by counting <code>L1.lua</code>, <code>L2.lua</code>, ... until one is missing (max 99). To add a level, save it as the <b>next free number</b> (L9.lua, L10.lua, ...) &mdash; no game change needed. A gap (e.g. L9 missing, L10 present) hides every level after the gap.</li>
+      <li>The first line <code>-- @Name|Difficulty</code> is the name and difficulty shown in the picker. The radio reads only the first 80 bytes, so keep that line short; no <code>|</code> in the name.</li>
+      <li>Best % and attempts are stored per level number in <code>/SCRIPTS/GAMES/gdash.dat</code>; replacing a level keeps its old record.</li>
+    </ol>
+  </div>
+</section>
+
+<section class="panel" id="p-help">
+  <div class="cols" id="help">
+    <div style="max-width:520px">
+      <h3>Tiles (characters as stored in the level file)</h3>
+      <div id="helptiles"></div>
+      <h3>How a level file works</h3>
+      <ul>
+        <li>6 strings, bottom (ground) row first. Column <i>c</i> is 8 px wide; the cube (7&times;7) starts at x = 0 on the ground at speed 2 (90 px/s), cube mode, normal gravity.</li>
+        <li>The level ends at x = (longest row length) &times; 8 + 16, so trailing empty columns in row 1 make the level longer. The editor keeps row 1 full length and trims the other rows, like <code>tools/gdash/build.js</code>.</li>
+        <li>Portals act on the whole column: when the cube's centre enters the column, every portal in it fires, whatever its row.</li>
+        <li>The first line <code>-- @Name|Difficulty</code> is what the level picker shows (the editor reads it on import and always writes it).</li>
+        <li><b>Adding a level:</b> save it as the next free number, <code>L9.lua</code>, <code>L10.lua</code>, ... in <code>/SCRIPTS/GAMES/GDASH/</code> &mdash; no game change needed. The game counts L1, L2, ... until one is missing (max 99). Delete any old <code>.luac</code> of the same name.</li>
+      </ul>
+    </div>
+    <div style="max-width:520px">
+      <h3>Editor controls</h3>
+      <ul>
+        <li><b>Left drag</b> paints the selected tile, <b>right drag</b> erases. Painting past the end makes the level longer.</li>
+        <li>Type a tile's character to pick it (<span class="kbd">#</span> <span class="kbd">=</span> <span class="kbd">^</span> <span class="kbd">v</span> <span class="kbd">o</span> <span class="kbd">q</span> <span class="kbd">p</span> <span class="kbd">G</span> <span class="kbd">g</span> <span class="kbd">U</span> <span class="kbd">C</span> <span class="kbd">1</span>-<span class="kbd">4</span>, <span class="kbd">.</span> = empty).</li>
+        <li><b>Shift+drag</b> (or the Select tool) selects. <span class="kbd">Ctrl+C</span>/<span class="kbd">X</span>/<span class="kbd">V</span> copy / cut / paste (paste puts the bottom-left corner on the cell under the mouse), <span class="kbd">Del</span> clears, <span class="kbd">Esc</span> deselects.</li>
+        <li><span class="kbd">Ctrl+Z</span> undo, <span class="kbd">Ctrl+Y</span> / <span class="kbd">Ctrl+Shift+Z</span> redo. Mouse wheel scrolls sideways.</li>
+        <li><b>Insert cols</b> / <b>Delete cols</b> work on the selection's columns, or on N columns at the mouse.</li>
+        <li>The level is saved in this browser automatically (draft), but only <b>Download</b> gives you a file.</li>
+        <li><b>Check beatable</b> before exporting. Tight presses (window under ~60 ms) are flagged red; the radio runs at 20-80 ms per frame, so those are very hard.</li>
+      </ul>
+      <h3>Seconds shown</h3>
+      <p>"run" = time for the cube to reach the end following the speed portals (exact, since speed does not depend on jumps). Also listed: the time at each constant speed 1-4.</p>
+    </div>
+  </div>
+</section>
+
+<dialog id="pasteDlg">
+  <h3>Paste a level file (GDASH/L&lt;n&gt;.lua)</h3>
+  <textarea id="pasteText" rows="14" spellcheck="false"></textarea>
+  <div class="bar" style="margin-top:8px;justify-content:flex-end"><button id="pasteCancel">Cancel</button><button id="pasteOk">Load</button></div>
+</dialog>
+<div id="toast"></div>
+
+<!-- ============================================================
+     gd-core: parser, exporter, physics, music, solver.
+     Plain JavaScript, no DOM. Node can load it:
+       vm.runInNewContext(<this script's text>, {module:{exports:{}}})
+     ============================================================ -->
+<script id="gd-core">
+"use strict";
+var GD = (function () {
+  // ---- constants copied from GDASH/phys.lua ----
+  var GY = 58, CY = 10, S = 7, DT = 0.02;
+  var GC = 800, JV = 180, PADV = 250;
+  var GU = 520, UV = 135;
+  var BUF = 0.12;
+  var NOTES = "C C#D D#E F F#G G#A A#B ";
+  var PX = 28; // screen x of the cube (Game-GeometryDash.lua)
+
+  var TILES = [
+    { ch: ".", name: "Empty", desc: "Nothing. Right-click erases to this." },
+    { ch: "#", name: "Block", desc: "Solid 8x8. Land on its top (its bottom with flipped gravity). Running into its side kills." },
+    { ch: "=", name: "Slab", desc: "Solid top half (8x4) of the cell. Land on it or under it; its side kills." },
+    { ch: "^", name: "Spike", desc: "Kills. Hitbox 4x5 px at the bottom centre of the cell." },
+    { ch: "v", name: "Hanging spike", desc: "Kills. Hitbox 4x5 px at the top centre of the cell." },
+    { ch: "o", name: "Jump orb", desc: "Press while touching it (reach 4 px around the cube): jump at jump speed, also in the air. Each orb works once per touch." },
+    { ch: "q", name: "Gravity orb", desc: "Press while touching it: gravity flips, small push (60 px/s) the new way." },
+    { ch: "p", name: "Jump pad", desc: "Touch it: launched at 250 px/s (no press needed). Draws at the bottom of its cell." },
+    { ch: "G", name: "Gravity up", desc: "Portal (whole column): gravity points up, you run on the ceiling." },
+    { ch: "g", name: "Gravity down", desc: "Portal (whole column): normal gravity." },
+    { ch: "U", name: "UFO portal", desc: "Portal (whole column): UFO mode. Every press flaps (135 px/s), even in the air; weaker gravity (520)." },
+    { ch: "C", name: "Cube portal", desc: "Portal (whole column): back to cube mode (jump only from the ground, 180 px/s, gravity 800)." },
+    { ch: "1", name: "Speed 1", desc: "Portal (whole column): 70 px/s." },
+    { ch: "2", name: "Speed 2", desc: "Portal (whole column): 90 px/s (start speed)." },
+    { ch: "3", name: "Speed 3", desc: "Portal (whole column): 110 px/s." },
+    { ch: "4", name: "Speed 4", desc: "Portal (whole column): 130 px/s." }
+  ];
+  var TILE_CHARS = TILES.map(function (t) { return t.ch; }).join("");
+
+  // ------------------------------------------------------------------
+  // Lua level-file parser. Reads `return { "row", ..., u = n, m = "..." }`
+  // plus the "-- @Name|Difficulty" first line and the level number comment.
+  // ------------------------------------------------------------------
+  function luaTokens(src) {
+    var toks = [], i = 0, n = src.length, m;
+    while (i < n) {
+      var c = src[i];
+      if (c === " " || c === "\t" || c === "\r" || c === "\n" || c === "\f" || c === "\v") { i++; continue; }
+      if (c === "-" && src[i + 1] === "-") {
+        m = /^--\[(=*)\[/.exec(src.slice(i, i + 64));
+        if (m) {
+          var close = "]" + m[1] + "]", e = src.indexOf(close, i + m[0].length);
+          i = e < 0 ? n : e + close.length; continue;
+        }
+        var nl = src.indexOf("\n", i); i = nl < 0 ? n : nl + 1; continue;
+      }
+      if (c === '"' || c === "'") {
+        var q = c, out = "", j = i + 1, ok = false;
+        while (j < n) {
+          var d = src[j];
+          if (d === q) { ok = true; j++; break; }
+          if (d === "\n") break;
+          if (d === "\\") {
+            var x = src[j + 1];
+            var map = { n: "\n", t: "\t", r: "\r", a: "\x07", b: "\b", f: "\f", v: "\v", "\\": "\\", '"': '"', "'": "'", "\n": "\n" };
+            if (x in map) { out += map[x]; j += 2; continue; }
+            if (x === "x") { out += String.fromCharCode(parseInt(src.substr(j + 2, 2), 16)); j += 4; continue; }
+            if (x === "z") { j += 2; while (j < n && /\s/.test(src[j])) j++; continue; }
+            var dm = /^\d{1,3}/.exec(src.slice(j + 1, j + 4));
+            if (dm) { out += String.fromCharCode(+dm[0]); j += 1 + dm[0].length; continue; }
+            throw new Error("bad escape in string near: " + src.slice(i, i + 20));
+          }
+          out += d; j++;
+        }
+        if (!ok) throw new Error("unfinished string near: " + src.slice(i, i + 20));
+        toks.push({ t: "str", v: out }); i = j; continue;
+      }
+      if (c === "[" && (m = /^\[(=*)\[/.exec(src.slice(i, i + 64)))) {
+        var cl = "]" + m[1] + "]", s0 = i + m[0].length, e2 = src.indexOf(cl, s0);
+        if (e2 < 0) throw new Error("unfinished long string");
+        var body = src.slice(s0, e2);
+        if (body[0] === "\r") body = body.slice(1);
+        if (body[0] === "\n") body = body.slice(1);
+        toks.push({ t: "str", v: body }); i = e2 + cl.length; continue;
+      }
+      if ((m = /^(0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/.exec(src.slice(i, i + 64))) && /[\d.]/.test(c)) {
+        toks.push({ t: "num", v: Number(m[0]), raw: m[0] }); i += m[0].length; continue;
+      }
+      if ((m = /^[A-Za-z_]\w*/.exec(src.slice(i, i + 64)))) { toks.push({ t: "id", v: m[0] }); i += m[0].length; continue; }
+      toks.push({ t: "p", v: c }); i++;
+    }
+    return toks;
+  }
+
+  // the radio reads 80 bytes and matches "^%-%- @([^|%c]*)|([^%c]*)"
+  function parseHeader(text) {
+    var head = text.slice(0, 80);
+    var m = /^-- @([^|\x00-\x1f\x7f]*)\|([^\x00-\x1f\x7f]*)/.exec(head);
+    if (!m) return null;
+    return { name: m[1], diff: m[2] };
+  }
+
+  function parseLevel(text) {
+    text = String(text).replace(/^﻿/, "");
+    var warnings = [];
+    var hdr = parseHeader(text);
+    var nm = /Geometry Dash level (\d+)/.exec(text);
+    var toks = luaTokens(text);
+    var k = 0;
+    while (k < toks.length && !(toks[k].t === "id" && toks[k].v === "return")) k++;
+    if (k >= toks.length) throw new Error("no 'return {' found - is this a GDASH level file?");
+    k++;
+    if (!toks[k] || toks[k].v !== "{") throw new Error("expected '{' after return");
+    k++;
+    var pos = [], named = {}, idx = 1;
+    function value() {
+      var t = toks[k];
+      if (!t) throw new Error("unexpected end of file");
+      if (t.t === "p" && t.v === "-" && toks[k + 1] && toks[k + 1].t === "num") {
+        k += 2; return { t: "num", v: -toks[k - 1].v, raw: "-" + toks[k - 1].raw };
+      }
+      if (t.t === "str" || t.t === "num") { k++; return t; }
+      if (t.t === "id" && (t.v === "nil" || t.v === "true" || t.v === "false")) { k++; return t; }
+      throw new Error("unsupported value near token '" + t.v + "' (only strings and numbers)");
+    }
+    while (k < toks.length) {
+      var t = toks[k];
+      if (t.t === "p" && t.v === "}") { k++; break; }
+      if (t.t === "p" && (t.v === "," || t.v === ";")) { k++; continue; }
+      if (t.t === "id" && toks[k + 1] && toks[k + 1].v === "=" && toks[k + 1].t === "p") {
+        k += 2; named[t.v] = value(); continue;
+      }
+      if (t.t === "p" && t.v === "[") {
+        k++; var key = value();
+        if (!toks[k] || toks[k].v !== "]") throw new Error("expected ']'");
+        k++;
+        if (!toks[k] || toks[k].v !== "=") throw new Error("expected '='");
+        k++;
+        var val = value();
+        if (key.t === "num") pos[key.v] = val; else named[key.v] = val;
+        continue;
+      }
+      pos[idx++] = value();
+    }
+    var rows = [];
+    for (var r = 1; r <= 6; r++) {
+      var v = pos[r];
+      if (v && v.t === "str") rows.push(v.v);
+      else { rows.push(""); if (v && !(v.t === "id" && v.v === "nil")) warnings.push("row " + r + " is not a string, treated as empty"); }
+    }
+    for (var e in pos) if (+e > 6) warnings.push("extra value #" + e + " ignored (the game reads 6 rows)");
+    var u = null, mel = null;
+    if (named.u) {
+      if (named.u.t === "num") u = named.u.raw;
+      else if (named.u.t === "str" && !isNaN(Number(named.u.v))) { u = String(Number(named.u.v)); warnings.push("u was a string; it will be written as a number"); }
+      else warnings.push("u is not a number; the game would use 0.1");
+    }
+    if (named.m) {
+      if (named.m.t === "str") mel = named.m.v; else warnings.push("m is not a string; the game would play no music");
+    }
+    for (var nk in named) if (nk !== "u" && nk !== "m") warnings.push("field '" + nk + "' ignored (the game does not use it)");
+    if (!hdr) warnings.push("no '-- @Name|Difficulty' first line: the picker would show 'Level <n>' and '?'");
+    rows.forEach(function (s, i) {
+      var bad = s.replace(new RegExp("[" + TILE_CHARS.replace(/[\^\]\\-]/g, "\\$&") + "]", "g"), "");
+      if (bad.length) warnings.push("row " + (i + 1) + " has unknown characters '" + Array.from(new Set(bad)).join("") + "' (the game treats them as empty)");
+    });
+    return {
+      n: nm ? +nm[1] : null,
+      name: hdr ? hdr.name : "",
+      diff: hdr ? hdr.diff : "",
+      hasHeader: !!hdr,
+      rows: rows, u: u, m: mel, warnings: warnings
+    };
+  }
+
+  function luaQuote(s) {
+    var out = '"';
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i), ch = s[i];
+      if (ch === '"' || ch === "\\") out += "\\" + ch;
+      else if (ch === "\n") out += "\\n";
+      else if (c < 32 || c === 127 || c > 255) out += "\\" + (c & 255);
+      else out += ch;
+    }
+    return out + '"';
+  }
+
+  // Level -> L<n>.lua text, same layout as tools/gdash/build.js plus the
+  // "-- @Name|Difficulty" first line. Row 1 keeps its full length (that
+  // fixes where the level ends), rows 2-6 lose trailing dots.
+  function exportLevel(lv) {
+    var rows = [], W = 0, r;
+    for (r = 0; r < 6; r++) { var s = lv.rows[r] || ""; rows.push(s); if (s.length > W) W = s.length; }
+    var outRows = rows.map(function (s, i) {
+      if (i === 0) { while (s.length < W) s += "."; return s; }
+      return s.replace(/\.+$/, "");
+    });
+    var name = String(lv.name == null ? "" : lv.name).replace(/[|\x00-\x1f\x7f]/g, "");
+    var diff = String(lv.diff == null ? "" : lv.diff).replace(/[\x00-\x1f\x7f]/g, "");
+    var n = lv.n == null ? 1 : lv.n;
+    var hasMusic = typeof lv.m === "string" && lv.m.trim() !== "";
+    var u = lv.u == null || String(lv.u).trim() === "" ? "0.1" : String(lv.u).trim();
+    return "-- @" + name + "|" + diff + "\n" +
+      "-- Geometry Dash level " + n + ": rows bottom (ground) to top, tiles see GDASH/phys.lua\n" +
+      "-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n" +
+      "return {\n" + outRows.map(luaQuote).join(",\n") +
+      (hasMusic ? ",\nu = " + u + ",\nm = " + luaQuote(lv.m) : "") + "\n}\n";
+  }
+
+  // ------------------------------------------------------------------
+  // Physics: line-by-line port of GDASH/phys.lua
+  // ------------------------------------------------------------------
+  function rowTop(r) { return GY - 8 * r - 8; }
+  function rowOf(y) {
+    var r = Math.floor((GY - 1 - y) / 8);
+    if (r < 0) r = 0; else if (r > 5) r = 5;
+    return r;
+  }
+  function solid(t, r) {
+    var top = rowTop(r);
+    if (t === 35) return [top, top + 8];
+    if (t === 61) return [top, top + 4];
+    return null;
+  }
+  function hit(ax, ay, aw, ah, bx, by, bw, bh) {
+    return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+  }
+  function newPlayer() {
+    return { x: 0, y: GY - S, vy: 0, g: 1, ufo: false, spd: 90, buf: 0,
+      gr: true, orb: -1, pad: -1, dead: false, won: false, ang: 0 };
+  }
+  function clone(a) { var b = {}; for (var k in a) b[k] = a[k]; return b; }
+
+  // rows: array of up to 6 strings (index 0 = ground row)
+  function makeLevel(rows) {
+    var R = [], len = 0;
+    for (var i = 0; i < 6; i++) {
+      var s = rows && typeof rows[i] === "string" ? rows[i] : "";
+      R.push(s); if (s.length > len) len = s.length;
+    }
+    var endX = len * 8 + 16;
+    function tile(c, r) {
+      if (c < 0 || r < 0 || r > 5) return 46;
+      var s = R[r];
+      if (c >= s.length) return 46;
+      return s.charCodeAt(c) & 255;
+    }
+    function step(p, press) {
+      if (press) p.buf = BUF; else if (p.buf > 0) p.buf = p.buf - DT;
+      var cc = Math.floor((p.x + 3) / 8), r, c, t;
+      for (r = 0; r <= 5; r++) {
+        t = tile(cc, r);
+        if (t === 71) p.g = -1;
+        else if (t === 103) p.g = 1;
+        else if (t === 85) p.ufo = true;
+        else if (t === 67) p.ufo = false;
+        else if (t >= 49 && t <= 52) p.spd = 50 + 20 * (t - 48);
+      }
+      var g = p.g;
+      if (p.buf > 0) {
+        if (p.ufo) { p.vy = -UV * g; p.buf = 0; p.gr = false; }
+        else if (p.gr) { p.vy = -JV * g; p.buf = 0; p.gr = false; }
+      }
+      var c0 = Math.floor((p.x - 4) / 8), c1 = Math.floor((p.x + S + 3) / 8);
+      var r0 = rowOf(p.y + S + 3), r1 = rowOf(p.y - 4);
+      for (c = c0; c <= c1; c++) {
+        for (r = r0; r <= r1; r++) {
+          t = tile(c, r);
+          var key = c * 8 + r;
+          if ((t === 111 || t === 113) && p.buf > 0 && key !== p.orb &&
+              hit(p.x - 4, p.y - 4, S + 8, S + 8, c * 8, rowTop(r), 8, 8)) {
+            p.orb = key; p.buf = 0; p.gr = false;
+            if (t === 111) p.vy = -JV * g; else { p.g = -g; g = -g; p.vy = 60 * g; }
+          } else if (t === 112 && key !== p.pad && hit(p.x, p.y, S, S, c * 8, rowTop(r), 8, 8)) {
+            p.pad = key; p.vy = -PADV * g; p.gr = false;
+          }
+        }
+      }
+      p.x = p.x + p.spd * DT;
+      var gg = GC;
+      if (p.ufo) gg = GU;
+      p.vy = p.vy + gg * g * DT;
+      if (p.vy > 350) p.vy = 350; else if (p.vy < -350) p.vy = -350;
+      var py = p.y;
+      p.y = p.y + p.vy * DT;
+      p.gr = false;
+      c0 = Math.floor((p.x + 1) / 8); c1 = Math.floor((p.x + S - 2) / 8);
+      r0 = rowOf(p.y + S - 1); r1 = rowOf(p.y);
+      for (c = c0; c <= c1; c++) {
+        for (r = r0; r <= r1; r++) {
+          var sb = solid(tile(c, r), r);
+          if (sb) {
+            var top = sb[0], bot = sb[1];
+            if (p.y < bot && p.y + S > top) {
+              if (p.vy * g >= 0) {
+                if (g > 0 && py + S <= top + 3) { p.y = top - S; p.vy = 0; p.gr = true; }
+                else if (g < 0 && py >= bot - 3) { p.y = bot; p.vy = 0; p.gr = true; }
+              } else {
+                if (g > 0 && py >= bot - 3) { p.y = bot; p.vy = 0; }
+                else if (g < 0 && py + S <= top + 3) { p.y = top - S; p.vy = 0; }
+              }
+            }
+          }
+        }
+      }
+      if (p.y + S >= GY) {
+        p.y = GY - S; p.vy = 0;
+        if (g > 0) p.gr = true;
+      } else if (p.y <= CY) {
+        p.y = CY; p.vy = 0;
+        if (g < 0) p.gr = true;
+      }
+      if (p.gr) p.ang = 0; else p.ang = p.ang + 9 * DT;
+      c0 = Math.floor(p.x / 8); c1 = Math.floor((p.x + S - 1) / 8);
+      r0 = rowOf(p.y + S - 1); r1 = rowOf(p.y);
+      for (c = c0; c <= c1; c++) {
+        for (r = r0; r <= r1; r++) {
+          t = tile(c, r);
+          var sd = solid(t, r);
+          var tp = rowTop(r);
+          if ((sd && hit(p.x, p.y + 1, S, S - 2, c * 8, sd[0], 8, sd[1] - sd[0])) ||
+              (t === 94 && hit(p.x + 1, p.y + 1, S - 2, S - 2, c * 8 + 2, tp + 3, 4, 5)) ||
+              (t === 118 && hit(p.x + 1, p.y + 1, S - 2, S - 2, c * 8 + 2, tp, 4, 5))) {
+            p.dead = true;
+            return;
+          }
+        }
+      }
+      if (p.x >= endX) p.won = true;
+    }
+    return { tile: tile, step: step, endX: endX, len: len, rows: R };
+  }
+
+  // ------------------------------------------------------------------
+  // Music: port of tok()/music() from phys.lua
+  // ------------------------------------------------------------------
+  // returns [nextPos, freq, len] or null; pos is 1-based like Lua
+  function tok(mel, pos) {
+    var re = /\S+/g; re.lastIndex = pos - 1;
+    var mm = re.exec(mel);
+    if (!mm) return null;
+    var w = mm[0], e = mm.index + w.length; // Lua e (1-based end) = index+len
+    if (w[0] === "R") { var d = w.charAt(1); return [e + 1, 0, /^[0-9]$/.test(d) ? +d : 1]; }
+    var m = /^([A-Z]#?)(\d)(\d)$/.exec(w);
+    if (!m) return [e + 1, 0, 1];
+    var nm = m[1]; if (nm.length === 1) nm += " ";
+    var i = NOTES.indexOf(nm) + 1; if (i === 0) i = 19;
+    var midi = 12 * (+m[2] + 1) + (i - 1) / 2;
+    return [e + 1, 440 * Math.pow(2, (midi - 69) / 12), +m[3]];
+  }
+  // describe every token for the editor (and flag what the radio would not play as intended)
+  function tuneTokens(mel) {
+    var out = [], re = /\S+/g, mm;
+    mel = mel || "";
+    while ((mm = re.exec(mel))) {
+      var w = mm[0], tk = tok(w, 1), info = { raw: w, f: tk[1], len: tk[2], ok: true, rest: tk[1] === 0, msg: "" };
+      if (w[0] === "R") {
+        if (!/^R[1-9]$/.test(w)) { info.ok = false; info.msg = "rest should be R1..R9 (radio reads it as " + tk[2] + " unit" + (tk[2] === 1 ? "" : "s") + ")"; }
+      } else {
+        var m = /^([A-G]#?)(\d)(\d)$/.exec(w);
+        if (!m) { info.ok = false; info.msg = "not a note: plays as a 1-unit rest"; }
+        else if (/^(E#|B#)$/.test(m[1])) { info.ok = false; info.msg = m[1] + " does not exist on the radio: plays as A"; }
+        else if (m[3] === "0") { info.ok = false; info.msg = "length 0: skipped"; }
+        else { info.name = m[1]; info.oct = +m[2]; info.midi = 12 * (+m[2] + 1) + NOTES.indexOf(m[1].length === 1 ? m[1] + " " : m[1]) / 2; }
+        if (info.ok && (tk[1] < 100 || tk[1] > 8000)) { info.ok = false; info.msg = "pitch out of the beeper's range (" + Math.floor(tk[1]) + " Hz)"; }
+      }
+      out.push(info);
+    }
+    return out;
+  }
+  // makeMusic(mel, u, playTone) -> music(t), exactly like phys.lua
+  function makeMusic(melIn, uIn, playTone) {
+    var mel = typeof melIn === "string" ? melIn : null;
+    var U = Number(uIn); if (uIn == null || uIn === "" || isNaN(U)) U = 0.1;
+    var mPos = 1, mT = 0;
+    return function music(t) {
+      if (!mel) return;
+      if (t < 0) { mPos = 1; mT = 0; return; }
+      for (var k = 1; k <= 4; k++) {
+        if (mT > t) break;
+        var r = tok(mel, mPos);
+        if (!r) r = tok(mel, 1);
+        if (!r) { mel = null; return; }
+        var d = r[2] * U;
+        if (r[1] > 0 && t - mT < 0.1) playTone(Math.floor(r[1]), Math.floor(d * 1000) - 20);
+        mPos = r[0]; mT = mT + d;
+      }
+    };
+  }
+
+  // ------------------------------------------------------------------
+  // Level length: steps for the cube to reach the end. Speed only depends
+  // on x (portals cover whole columns), so this is exact for any run.
+  // ------------------------------------------------------------------
+  function levelTiming(rows) {
+    var L = makeLevel(rows), x = 0, spd = 90, steps = 0, used = { 90: true };
+    while (x < L.endX && steps < 500000) {
+      var cc = Math.floor((x + 3) / 8);
+      for (var r = 0; r <= 5; r++) {
+        var t = L.tile(cc, r);
+        if (t >= 49 && t <= 52) { spd = 50 + 20 * (t - 48); used[spd] = true; }
+      }
+      x += spd * DT; steps++;
+    }
+    var at = {};
+    [70, 90, 110, 130].forEach(function (v) { at[v] = L.endX / v; });
+    return { cols: L.len, endX: L.endX, steps: steps, seconds: steps * DT,
+      speeds: Object.keys(used).map(Number).sort(function (a, b) { return a - b; }), atSpeed: at };
+  }
+
+  // ------------------------------------------------------------------
+  // Solver: port of tools/gdash/solve.js (its Lua BFS + press windows)
+  // ------------------------------------------------------------------
+  function since(p) { return p._since === undefined ? 99 : p._since; }
+  function makeKey(minGap) {
+    return function (p) {
+      return p.y.toFixed(1) + "|" + p.vy.toFixed(1) + "|" + p.g + "|" + p.ufo + "|" + p.orb + "|" + p.pad + "|" +
+        (p.buf > 0 ? p.buf : 0).toFixed(2) + "|" + p.gr + "|" + Math.min(since(p), minGap);
+    };
+  }
+  function* solveGen(rows, opts) {
+    opts = opts || {};
+    var MINGAP = opts.minGap || 5, CAP = opts.cap || 3000, NOWIN = !!opts.noWindows;
+    var L = makeLevel(rows), key = makeKey(MINGAP);
+    var front = [{ p: newPlayer(), h: null }];
+    var step = 0, lastx = 0, peak = 0, found = null, t0 = Date.now();
+    search:
+    while (step < 30000) {
+      step++;
+      var nxt = [], seen = new Set();
+      for (var si = 0; si < front.length; si++) {
+        var s = front[si];
+        for (var pi = 0; pi <= 1; pi++) {
+          var press = pi === 1;
+          if (!press || (s.p.buf <= 0 && since(s.p) >= MINGAP)) {
+            var p = clone(s.p);
+            L.step(p, press);
+            p._since = press ? 1 : since(s.p) + 1;
+            var h = s.h;
+            if (press) h = { s: step, n: s.h, x: s.p.x };
+            if (p.won) { found = { h: h, n: step }; break search; }
+            if (!p.dead) {
+              lastx = p.x;
+              var k = key(p);
+              if (!seen.has(k)) { seen.add(k); nxt.push({ p: p, h: h }); }
+            }
+          }
+        }
+      }
+      if (nxt.length > peak) peak = nxt.length;
+      if (nxt.length === 0) {
+        return { ok: false, reason: "stuck", col: Math.floor(lastx / 8), x: lastx, step: step, peak: peak,
+          text: "STUCK at column " + Math.floor(lastx / 8) + " (x=" + Math.floor(lastx) + ")" };
+      }
+      if (nxt.length > CAP) nxt.length = CAP;
+      front = nxt;
+      if (step % 20 === 0) yield { phase: "search", step: step, x: lastx, endX: L.endX, states: nxt.length };
+    }
+    if (!found) return { ok: false, reason: "timeout", step: step, peak: peak, text: "no win within 30000 steps" };
+    var list = [], XS = {}, hh = found.h;
+    while (hh) { list.push(hh.s); XS[hh.s] = hh.x; hh = hh.n; }
+    var presses = list.reverse();
+    var n = found.n;
+
+    // BFS from state p0: can some input sequence stay alive for 'hor' steps (or win)?
+    function survive(p0, hor) {
+      var fr = [p0];
+      for (var st = 1; st <= hor; st++) {
+        var nx = [], sn = new Set();
+        for (var i = 0; i < fr.length; i++) {
+          var s = fr[i];
+          for (var pi = 0; pi <= 1; pi++) {
+            if (pi === 0 || (s.buf <= 0 && since(s) >= MINGAP)) {
+              var p = clone(s);
+              L.step(p, pi === 1);
+              p._since = pi === 1 ? 1 : since(s) + 1;
+              if (p.won) return true;
+              if (!p.dead) { var k = key(p); if (!sn.has(k)) { sn.add(k); nx.push(p); } }
+            }
+          }
+        }
+        if (nx.length === 0) return false;
+        if (nx.length > 80) nx.length = 80;
+        fr = nx;
+      }
+      return true;
+    }
+    // press j moved to s1 (later presses dropped): alive and able to go on for 2 s?
+    function shiftOk(j, s1) {
+      var p = newPlayer(), set = {};
+      for (var i = 0; i < j; i++) set[presses[i]] = true;
+      set[s1] = true;
+      for (var k = 1; k <= s1; k++) {
+        L.step(p, set[k] === true);
+        if (p.dead) return false;
+        if (p.won) return true;
+      }
+      p._since = 1;
+      return survive(p, 100);
+    }
+    var W = [], minW = 999, minAt = -1, sumW = 0;
+    for (var j = 0; j < (NOWIN ? 0 : presses.length); j++) {
+      var s0 = presses[j], lo = 0, hi = 0;
+      for (var dir = -1; dir <= 1; dir += 2) {
+        for (var d = 1; d <= 5; d++) {
+          var s1 = s0 + dir * d;
+          if (s1 < 1 || (j > 0 && s1 - presses[j - 1] < MINGAP) || (j + 1 < presses.length && presses[j + 1] - s1 < MINGAP)) break;
+          if (!shiftOk(j, s1)) break;
+          if (dir < 0) lo = d; else hi = d;
+        }
+      }
+      var w = lo + hi + 1;
+      W[j] = { w: w, lo: lo, hi: hi };
+      sumW += w;
+      if (w < minW) { minW = w; minAt = s0; }
+      if (j % 2 === 0) yield { phase: "windows", done: j, of: presses.length };
+    }
+    return {
+      ok: true, steps: n, seconds: n * DT, peak: peak, ms: Date.now() - t0,
+      presses: presses.map(function (s, i) {
+        return { s: s, x: XS[s], col: Math.floor(XS[s] / 8), w: W[i] ? W[i].w : null, lo: W[i] ? W[i].lo : null, hi: W[i] ? W[i].hi : null };
+      }),
+      minW: NOWIN ? null : minW, minAt: minAt, avgW: presses.length ? sumW / presses.length : 0,
+      text: "SOLVED " + n + " steps (" + (n * DT).toFixed(1) + "s), " + presses.length + " presses" +
+        (NOWIN ? "" : ", press window min " + minW + " steps (=" + minW * 20 + "ms, at " + (minAt * DT).toFixed(1) + "s) avg " + (sumW / Math.max(1, presses.length)).toFixed(1) + " steps")
+    };
+  }
+  function solveLevel(rows, opts) {
+    var g = solveGen(rows, opts), r;
+    do { r = g.next(); } while (!r.done);
+    return r.value;
+  }
+  // run a press list (step numbers, 1-based) through the physics
+  function replay(rows, presses, maxSteps) {
+    var L = makeLevel(rows), p = newPlayer(), set = {}, trace = [[p.x, p.y]];
+    (presses || []).forEach(function (s) { set[s] = true; });
+    maxSteps = maxSteps || 30000;
+    for (var k = 1; k <= maxSteps; k++) {
+      L.step(p, set[k] === true);
+      trace.push([p.x, p.y]);
+      if (p.dead || p.won) break;
+    }
+    return { won: p.won, dead: p.dead, steps: k, x: p.x, y: p.y, pct: Math.max(0, Math.min(100, Math.floor(p.x * 100 / L.endX))), trace: trace };
+  }
+
+  return {
+    GY: GY, CY: CY, S: S, DT: DT, PX: PX, TILES: TILES, TILE_CHARS: TILE_CHARS,
+    parseLevel: parseLevel, parseHeader: parseHeader, exportLevel: exportLevel, luaQuote: luaQuote,
+    makeLevel: makeLevel, newPlayer: newPlayer, rowTop: rowTop, clone: clone,
+    tok: tok, tuneTokens: tuneTokens, makeMusic: makeMusic, levelTiming: levelTiming,
+    solveGen: solveGen, solveLevel: solveLevel, replay: replay
+  };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = GD;
+</script>
+
+<!-- ============================ UI ============================ -->
+<script>
+"use strict";
+(function () {
+  var BUNDLED = /*BUNDLED*/{"1":"-- @First Step|Easy\n-- Geometry Dash level 1: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\"...................^............^............^^...................##...##.....................##########################.............##..##..##..##..................^^^...........^......^^...................\",\n\".......................................................................##................................^^..............................##..##..##\",\n\".............................................................................................................................................##..##\",\n\".................................................................................................................................................##\",\n\"\",\n\"\",\nu = 0.11,\nm = \"C42 G42 E52 G42 C42 G42 E52 D52 A32 E42 C52 E42 A32 E42 C52 B42 F32 C42 A42 C42 F32 C42 A42 C52 G32 D42 B42 D42 G32 D42 G52 B42\"\n}\n","2":"-- @Back Beat|Easy\n-- Geometry Dash level 2: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\"................^^.........^...^..........^^^^^^^^^^^^^^^^^^^^....^^^^^^^^^^^^^^^^^^^.......^^^^^^^^^............^^......^^.......^..........##....##....##...##...............^^.....##.....^^^................\",\n\"............................................===...===...===.........===.......................#########............................................##.........##\",\n\"..........................................................................===.....................^\",\n\"................................................................................===\",\n\"\",\n\"\",\nu = 0.11,\nm = \"A32 A42 R1 A42 C52 A42 E52 A42 F32 F42 R1 F42 A42 F42 C52 F42 G32 G42 R1 G42 B42 G42 D52 G42 E32 E42 R1 E42 G#42 E42 B42 E42\"\n}\n","3":"-- @Pad Jumper|Normal\n-- Geometry Dash level 3: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\"................^^.......^.........p...####..........^^^^^^^.........^^^.p..^^^................^^...............p^^^^^.......p^^^^^...........p....###..####.............^^...p....###..............\",\n\".......................................####........................................................................................................###..####\",\n\".......................................####..............o...............................o..............................................................####\",\n\".......................................####..................................................#######....................................................####\",\n\"\",\n\"\",\nu = 0.1,\nm = \"D42 D52 A42 D52 F52 E52 D52 A42 C42 C52 G42 C52 E52 D52 C52 G42 A#32 A#42 F42 A#42 D52 C52 A#42 F42 A32 A42 E42 A42 C#52 E52 A52 E52\"\n}\n","4":"-- @Orbit|Normal\n-- Geometry Dash level 4: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\"........3...............^^......^^^.......^^^^^^^^^^^^^^^^^^^.......p.^^^^^^^^^^...........^......^^.......^^^.......^^^^^^^^^^^^^^^^^^^^^.............###..^..###..^..###.................\",\n\".......................................................................................................................................................###.....###.....###\",\n\"..............................................o....o....o...............................................................o.....o.....o\",\n\".......................................................................#######\",\n\"\",\n\"\",\nu = 0.09,\nm = \"E42 B42 E52 B42 G52 B42 F#52 B42 C42 G42 C52 G42 E52 G42 D52 G42 D42 A42 D52 A42 F#52 A42 E52 A42 B32 F#42 B42 F#42 D#52 F#42 B42 D#52\"\n}\n","5":"-- @Flip Side|Hard\n-- Geometry Dash level 5: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\".............^....^^............................^....................^...........^^............^^.........^^^.......................................^^...........^^.......^^^.................\",\n\"..................................................................g.............................................................................................3\",\n\".............................G\",\n\"..........................................................................##......................q......................q.....................g\",\n\"..........................................................................##\",\n\".....................................v.....vv.........v..............................................v......................###.......v\",\nu = 0.1,\nm = \"F#32 C#42 F#42 A42 C#52 A42 F#42 C#42 D32 A32 D42 F#42 A42 F#42 D42 A32 E32 B32 E42 G#42 B42 G#42 E42 B32 C#42 G#42 C#52 E52 G#52 E52 C#52 G#42\"\n}\n","6":"-- @Saucer|Harder\n-- Geometry Dash level 6: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\"...........^^................^^^^......##.....^^^............##.........##..............##########.......##########.................^^....^^^..............\",\n\".......................................##......................................................................................C\",\n\"\",\n\"..............................................##.......##..........##\",\n\"............................................................................................######.........######\",\n\"......................U......##........##.....................................##............######.........######\",\nu = 0.11,\nm = \"G42 R1 D52 G52 A#52 R1 A52 G52 D#42 R1 A#42 D#52 G52 R1 F52 D#52 F42 R1 C52 F52 A52 R1 G52 F52 D42 R1 A42 D52 F#52 A52 F#52 D52\"\n}\n","7":"-- @Overdrive|Insane\n-- Geometry Dash level 7: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\".........^^.....##.....^^^........p...####..........4..^^^......^^........................................................^^^.......^^^^^^^^^^^^^^^^...............^^^^..........##.....^^^..........^^.......^^^.................\",\n\"........3.............................####........................................................................g..............................................................##...............C\",\n\"......................................####...................................G.........................................................o......o\",\n\"......................................####\",\n\"\",\n\".....................................................................................v...........vv............................................................U.........##..........##\",\nu = 0.08,\nm = \"A32 A42 A32 A42 C52 A42 D52 A42 A32 A42 A32 A42 E52 D52 C52 B42 F32 F42 F32 F42 A42 F42 C52 F42 G32 G42 G32 G42 B42 G42 D52 B42\"\n}\n","8":"-- @Dash Demon|Demon\n-- Geometry Dash level 8: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\nreturn {\n\".........^^.....^^^........^^^^^^^^^^^^^^^^^...............^^^^......##.....^^^.......................................................^^^........^^^^^^^^^^^^^^^^^^^^.........^^^^^^^^^^^^^^^^^^^...................^^.........########.........#########..................^^^.......^^...................\",\n\"........4......................##..##..##............................##...........................................................g.....................................................................................................................................C\",\n\"...................................##...............................................................................................................o......o......o\",\n\"............................................................................##.................................................................................................q.........................g\",\n\"........................................................................................................................................................................................................................................######..........######\",\n\"....................................................U......##........##.................C..G............v.........vv........................................................................v...............................U...........######..........######\",\nu = 0.08,\nm = \"E32 E42 G42 E42 A#42 E42 A42 G42 E32 E42 G42 E42 D52 C52 B42 G42 C42 C52 B42 C52 G42 C52 F#42 C52 B32 B42 D#52 F#52 B52 F#52 D#52 B42\"\n}\n"}/*END*/;
+  var $ = function (id) { return document.getElementById(id); };
+  var GY = GD.GY, CY = GD.CY, S = GD.S, PX = GD.PX;
+  var RULER = 16;
+
+  // ---------------- 1-bit LCD emulation ----------------
+  var FONT = {
+    "0": "111101101101111", "1": "010110010010111", "2": "111001111100111", "3": "111001111001111", "4": "101101111001001",
+    "5": "111100111001111", "6": "111100111101111", "7": "111001010010010", "8": "111101111101111", "9": "111101111001111",
+    A: "010101111101101", B: "110101110101110", C: "011100100100011", D: "110101101101110", E: "111100110100111",
+    F: "111100110100100", G: "011100101101011", H: "101101111101101", I: "111010010010111", J: "001001001101010",
+    K: "101101110101101", L: "100100100100111", M: "101111111101101", N: "110101101101101", O: "010101101101010",
+    P: "110101110100100", Q: "010101101110011", R: "110101110101101", S: "011100010001110", T: "111010010010010",
+    U: "101101101101111", V: "101101101101010", W: "101101111111101", X: "101101010101101", Y: "101101010010010",
+    Z: "111001010100111", g: "011101011001110", "%": "101001010100101", "<": "001010100010001", ">": "100010001010100",
+    "/": "001001010100100", "!": "010010010000010", ":": "000010000010000", ".": "000000000000010", "-": "000000111000000",
+    "?": "110001010000010", "#": "101111101111101", " ": "000000000000000"
+  };
+  function Lcd(w, h) { this.w = w; this.h = h; this.px = new Uint8Array(w * h); }
+  Lcd.prototype.clear = function () { this.px.fill(0); };
+  Lcd.prototype.set = function (x, y, v) {
+    x = Math.floor(x); y = Math.floor(y);
+    if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.px[y * this.w + x] = v === undefined ? 1 : v;
+  };
+  Lcd.prototype.line = function (x1, y1, x2, y2, dotted) {
+    x1 = Math.floor(x1); y1 = Math.floor(y1); x2 = Math.floor(x2); y2 = Math.floor(y2);
+    var dx = Math.abs(x2 - x1), dy = -Math.abs(y2 - y1), sx = x1 < x2 ? 1 : -1, sy = y1 < y2 ? 1 : -1, err = dx + dy, i = 0;
+    for (;;) {
+      if (!dotted || (i & 1) === 0) this.set(x1, y1);
+      i++;
+      if (x1 === x2 && y1 === y2) break;
+      var e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x1 += sx; }
+      if (e2 <= dx) { err += dx; y1 += sy; }
+    }
+  };
+  Lcd.prototype.rect = function (x, y, w, h) {
+    if (w <= 0 || h <= 0) return;
+    this.line(x, y, x + w - 1, y); this.line(x, y + h - 1, x + w - 1, y + h - 1);
+    this.line(x, y, x, y + h - 1); this.line(x + w - 1, y, x + w - 1, y + h - 1);
+  };
+  Lcd.prototype.fill = function (x, y, w, h, v) {
+    for (var j = 0; j < h; j++) for (var i = 0; i < w; i++) this.set(x + i, y + j, v === undefined ? 1 : v);
+  };
+  // flags: 1 = INVERS, 4 = RIGHT, 0x200 = MIDSIZE
+  Lcd.prototype.text = function (x, y, str, flags) {
+    flags = flags || 0; str = String(str);
+    var sc = flags & 0x200 ? 2 : 1, adv = 3 * sc + 1, w = str.length * adv - 1;
+    if (flags & 4) x = x - w;
+    if (flags & 1) this.fill(x - 1, y - 1, w + 2, 5 * sc + 2, 1);
+    for (var i = 0; i < str.length; i++) {
+      var ch = str[i], gl = FONT[ch] || FONT[ch.toUpperCase()] || FONT["?"];
+      for (var r = 0; r < 5; r++) for (var c = 0; c < 3; c++) {
+        if (gl[r * 3 + c] === "1") for (var a = 0; a < sc; a++) for (var b = 0; b < sc; b++)
+          this.set(x + i * adv + c * sc + a, y + r * sc + b, flags & 1 ? 0 : 1);
+      }
+    }
+  };
+  var offCanvas = document.createElement("canvas");
+  Lcd.prototype.blit = function (ctx, dx, dy, scale) {
+    offCanvas.width = this.w; offCanvas.height = this.h;
+    var octx = offCanvas.getContext("2d"), img = octx.createImageData(this.w, this.h), d = img.data;
+    for (var i = 0; i < this.px.length; i++) {
+      var on = this.px[i];
+      d[i * 4] = on ? 21 : 233; d[i * 4 + 1] = on ? 23 : 236; d[i * 4 + 2] = on ? 26 : 223; d[i * 4 + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(offCanvas, dx, dy, this.w * scale, this.h * scale);
+  };
+
+  // port of drawTile() from Game-GeometryDash.lua
+  function drawTile(lcd, t, sx, r, clipW) {
+    var top = GD.rowTop(r), b = top + 8;
+    if (t === 35 || t === 61) {
+      var h = t === 61 ? 4 : 8, x0 = Math.max(sx, 0), x1 = Math.min(sx + 8, clipW);
+      if (x1 - x0 > 1) lcd.rect(x0, top, x1 - x0, h);
+      if (t === 35 && sx >= 0 && sx <= clipW - 8) lcd.set(sx + 3, top + 3);
+    } else if (sx < 0 || sx > clipW - 8) {
+      return;
+    } else if (t === 94) {
+      lcd.line(sx, b - 1, sx + 3, b - 7); lcd.line(sx + 3, b - 7, sx + 6, b - 1); lcd.line(sx + 1, b - 1, sx + 5, b - 1);
+    } else if (t === 118) {
+      lcd.line(sx, top, sx + 3, top + 6); lcd.line(sx + 3, top + 6, sx + 6, top); lcd.line(sx + 1, top, sx + 5, top);
+    } else if (t === 111) {
+      lcd.rect(sx + 1, top + 1, 6, 6); lcd.set(sx + 3, top + 3);
+    } else if (t === 113) {
+      lcd.fill(sx + 2, top + 2, 4, 4);
+    } else if (t === 112) {
+      lcd.fill(sx + 1, b - 2, 6, 2);
+    } else if (t === 71 || t === 103 || t === 85 || t === 67 || (t >= 49 && t <= 52)) {
+      lcd.rect(sx + 1, CY, 5, GY - CY);
+      lcd.text(sx + 2, top + 2, String.fromCharCode(t));
+    } else if (t !== 46) {
+      lcd.text(sx + 2, top + 2, "?");
+    }
+  }
+  // ground, ceiling, hatching for world camera 'cam' on an lcd of any width
+  function drawBackdrop(lcd, cam) {
+    lcd.line(0, GY, lcd.w - 1, GY);
+    lcd.line(0, CY - 1, lcd.w - 1, CY - 1, true);
+    var off = ((cam % 16) + 16) % 16;
+    for (var gx = -off; gx < lcd.w; gx += 16) if (gx >= 0 && gx + 3 < lcd.w) lcd.line(gx, GY + 1, gx + 3, lcd.h - 1);
+  }
+  // port of drawWorld()/drawPlayer() for a 128x64 screen
+  function drawWorld(lcd, L, P, o) {
+    lcd.clear();
+    var cam = Math.floor(P.x) - PX;
+    drawBackdrop(lcd, cam);
+    var c0 = Math.floor(cam / 8);
+    for (var c = c0; c <= c0 + 16; c++) for (var r = 0; r < 6; r++) {
+      var t = L.tile(c, r);
+      if (t !== 46) drawTile(lcd, t, c * 8 - cam, r, 128);
+    }
+    var ex = L.endX - cam;
+    if (ex >= 0 && ex < 128) lcd.line(ex, CY, ex, GY - 1, true);
+    var ax = 40 - cam;
+    if (o.attempt != null && ax > 0 && ax < 128 - 60) lcd.text(ax, 24, "Attempt " + o.attempt);
+    var y = Math.floor(P.y);
+    if (o.dead) {
+      var cx = PX + 3, cy = y + 3, d = Math.floor(o.deadT * 40) + 2;
+      if (cy - d < 0) d = cy;
+      lcd.line(cx - d, cy, cx + d, cy); lcd.line(cx, cy - d, cx, cy + d);
+      lcd.line(cx - d, cy - d, cx + d, cy + d); lcd.line(cx - d, cy + d, cx + d, cy - d);
+    } else if (P.ufo) {
+      lcd.rect(PX, y + 3, S, 4); lcd.rect(PX + 2, y, 3, 4);
+    } else if (P.gr || !o.playing) {
+      lcd.rect(PX, y, S, S); lcd.fill(PX + 2, y + 2, 3, 3);
+    } else {
+      var cs = Math.cos(P.ang) * 4.5, sn = Math.sin(P.ang) * 4.5, ccx = PX + 3.5, ccy = P.y + 3.5;
+      var pts = [[ccx + cs, ccy + sn], [ccx - sn, ccy + cs], [ccx - cs, ccy - sn], [ccx + sn, ccy - cs]].map(function (q) { return [Math.floor(q[0]), Math.floor(q[1])]; });
+      for (var i = 0; i < 4; i++) lcd.line(pts[i][0], pts[i][1], pts[(i + 1) % 4][0], pts[(i + 1) % 4][1]);
+    }
+    if (o.hud) {
+      lcd.text(1, 1, o.hudLeft);
+      lcd.rect(32, 2, 62, 5);
+      var w = Math.floor(o.pct * 60 / 100);
+      if (w > 0) lcd.fill(33, 3, w, 3);
+      lcd.text(127, 1, o.pct + "%", 4);
+    }
+  }
+
+  // ---------------- document state ----------------
+  var doc;          // { n, name, diff, W, cells: [6 arrays of chars], u, m }
+  var undoStack = [], redoStack = [];
+  var cur = "#", tool = "paint", zoom = 4, showGrid = true;
+  var hover = null, sel = null, clip = null, deaths = [], solveRes = null, solveSig = null;
+  var dirtyTimer = null;
+
+  function blankCells(W) { var c = []; for (var r = 0; r < 6; r++) { c.push(new Array(W).fill(".")); } return c; }
+  function rowsOf(d) { d = d || doc; return d.cells.map(function (a) { return a.join(""); }); }
+  function exportText() { return GD.exportLevel({ n: doc.n, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }); }
+  function snapshot() { return JSON.stringify({ n: doc.n, name: doc.name, diff: doc.diff, W: doc.W, rows: rowsOf(), u: doc.u, m: doc.m }); }
+  function restore(s) {
+    var o = JSON.parse(s);
+    doc = { n: o.n, name: o.name, diff: o.diff, W: o.W, u: o.u, m: o.m, cells: o.rows.map(function (r) { var a = r.split(""); while (a.length < o.W) a.push("."); return a; }) };
+  }
+  function pushUndo() { undoStack.push(snapshot()); if (undoStack.length > 300) undoStack.shift(); redoStack = []; }
+  function undo() { if (!undoStack.length) return; redoStack.push(snapshot()); restore(undoStack.pop()); changed(true); }
+  function redo() { if (!redoStack.length) return; undoStack.push(snapshot()); restore(redoStack.pop()); changed(true); }
+
+  function loadDoc(lv, n) {
+    var W = 0; lv.rows.forEach(function (r) { if (r.length > W) W = r.length; });
+    if (W < 1) W = 1;
+    doc = { n: n || lv.n || 9, name: lv.name || "", diff: lv.diff || "", W: W, u: lv.u == null ? "0.1" : lv.u, m: lv.m == null ? "" : lv.m,
+      cells: lv.rows.map(function (r) { var a = r.split(""); while (a.length < W) a.push("."); return a; }) };
+    undoStack = []; redoStack = []; sel = null; deaths = []; solveRes = null; mSel = -1;
+    $("scroller").scrollLeft = 0;
+    changed(true);
+  }
+  function newDoc() {
+    var W = 60, rows = ["", "", "", "", "", ""];
+    rows[0] = ".".repeat(W);
+    loadDoc({ rows: rows, name: "My Level", diff: "Normal", u: "0.1", m: "C42 E42 G42 C52 G42 E42 D42 B32" }, nextFreeNumber());
+  }
+  function nextFreeNumber() { var k = Object.keys(BUNDLED).map(Number); return k.length ? Math.max.apply(null, k) + 1 : 9; }
+
+  function ensureW(W) {
+    if (W <= doc.W) return;
+    doc.cells.forEach(function (a) { while (a.length < W) a.push("."); });
+    doc.W = W;
+  }
+  function setCell(c, r, ch) {
+    if (c < 0 || r < 0 || r > 5) return;
+    ensureW(c + 1);
+    doc.cells[r][c] = ch;
+  }
+
+  // ---------------- change propagation ----------------
+  function changed(full) {
+    syncFields();
+    updateStats();
+    drawEditor();
+    drawPreview();
+    if (activeTab === "export") updateExport();
+    if (activeTab === "music" || full) { drawRoll(); updateMusicInfo(); }
+    clearTimeout(dirtyTimer);
+    dirtyTimer = setTimeout(saveDraft, 400);
+  }
+  function syncFields() {
+    if (document.activeElement !== $("fNum")) $("fNum").value = doc.n;
+    if (document.activeElement !== $("fName")) $("fName").value = doc.name;
+    if (document.activeElement !== $("fDiff")) $("fDiff").value = doc.diff;
+    if (document.activeElement !== $("fW")) $("fW").value = doc.W;
+    if (document.activeElement !== $("fU")) $("fU").value = doc.u;
+    if (document.activeElement !== $("fM")) $("fM").value = doc.m;
+    $("bUndo").disabled = !undoStack.length; $("bRedo").disabled = !redoStack.length;
+    $("bDownload2").textContent = "Download L" + doc.n + ".lua";
+    $("sdpath").textContent = "/SCRIPTS/GAMES/GDASH/L" + doc.n + ".lua";
+    $("sdluac").textContent = "L" + doc.n + ".luac";
+  }
+  function saveDraft() { try { localStorage.setItem("gdash-editor-draft", snapshot()); } catch (e) { /* storage unavailable */ } }
+
+  function updateStats() {
+    var tm = GD.levelTiming(rowsOf());
+    var bytes = exportText().length;
+    var spd = tm.speeds.map(function (v) { return { 70: 1, 90: 2, 110: 3, 130: 4 }[v]; }).join(", ");
+    $("stats").innerHTML = tm.cols + " columns &middot; end x = " + tm.endX + " px &middot; run <b>" + tm.seconds.toFixed(1) + " s</b> (speeds used: " + spd + ") &middot; " +
+      "at constant speed 1/2/3/4: " + [70, 90, 110, 130].map(function (v) { return tm.atSpeed[v].toFixed(1); }).join(" / ") + " s &middot; file " + bytes + " B";
+  }
+
+  // ---------------- palette ----------------
+  function tileIcon(ch) {
+    var cv = document.createElement("canvas"); cv.width = 20; cv.height = 20;
+    var l = new Lcd(10, 10); l.clear();
+    var t = ch.charCodeAt(0);
+    // draw in a fake 1-row world shifted so the cell sits at y 1..8
+    var tmp = new Lcd(10, 64);
+    if (t >= 49 && t <= 52 || t === 71 || t === 103 || t === 85 || t === 67) {
+      tmp.rect(2, GY - 8, 5, 8); tmp.text(3, GY - 7, ch);
+    } else if (t !== 46) drawTile(tmp, t, 1, 0, 10);
+    for (var y = 0; y < 9; y++) for (var x = 0; x < 10; x++) l.px[(y + 1) * 10 + x] = tmp.px[(GY - 8 + y) * 10 + x];
+    l.blit(cv.getContext("2d"), 0, 0, 2);
+    return cv;
+  }
+  function buildPalette() {
+    var box = $("tiles");
+    GD.TILES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.className = "tilebtn"; b.dataset.ch = t.ch; b.title = t.desc + "  (key: " + t.ch + ")";
+      b.appendChild(tileIcon(t.ch));
+      var s = document.createElement("span"); s.innerHTML = "<b>" + (t.ch === "." ? "." : t.ch) + "</b> " + t.name; b.appendChild(s);
+      b.onclick = function () { pick(t.ch); };
+      box.appendChild(b);
+    });
+    var h = $("helptiles"), tbl = "<table class='list'>";
+    GD.TILES.forEach(function (t) { tbl += "<tr><td class='mono' style='white-space:nowrap'>" + t.ch + "</td><td><b>" + t.name + "</b></td><td>" + t.desc + "</td></tr>"; });
+    h.innerHTML = tbl + "</table>";
+    GD.TILES.forEach(function (t, i) { h.querySelectorAll("tr")[i].firstChild.prepend(tileIcon(t.ch)); });
+  }
+  function pick(ch) {
+    cur = ch;
+    document.querySelectorAll(".tilebtn").forEach(function (b) { b.classList.toggle("on", b.dataset.ch === ch); });
+    var t = GD.TILES.filter(function (x) { return x.ch === ch; })[0];
+    $("tileinfo").innerHTML = "<b>" + t.name + "</b> <code>" + t.ch + "</code><br>" + t.desc;
+    setTool("paint");
+  }
+  function setTool(t) { tool = t; $("tPaint").classList.toggle("on", t === "paint"); $("tSelect").classList.toggle("on", t === "select"); }
+
+  // ---------------- editor canvas ----------------
+  var ed = $("ed"), edctx = ed.getContext("2d"), scroller = $("scroller");
+  var VIEW_OFF = -16; // world x shown at the left edge when scrolled to 0
+  function viewX() { return scroller.scrollLeft / zoom + VIEW_OFF; }
+  function resizeEditor() {
+    ed.width = Math.max(200, ed.clientWidth || ed.parentNode.clientWidth - 12);
+    ed.height = RULER + 64 * zoom;
+    $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
+    drawEditor();
+  }
+  function stale() { return solveRes && solveSig !== rowsOf().join("\n"); }
+
+  function drawEditor() {
+    if (!doc) return;
+    $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
+    var vx = viewX(), bx0 = Math.floor(vx) - 8, wpx = Math.ceil(ed.width / zoom) + 24;
+    var L = GD.makeLevel(rowsOf());
+    var lcd = new Lcd(wpx, 64);
+    drawBackdrop(lcd, bx0);
+    var c0 = Math.floor(bx0 / 8) - 1, c1 = Math.ceil((bx0 + wpx) / 8) + 1;
+    for (var c = c0; c <= c1; c++) for (var r = 0; r < 6; r++) {
+      var t = L.tile(c, r);
+      if (t !== 46) drawTile(lcd, t, c * 8 - bx0, r, wpx + 100);
+    }
+    var ex = L.endX - bx0; lcd.line(ex, CY, ex, GY - 1, true);
+    // start cube outline
+    lcd.rect(0 - bx0, GY - S, S, S);
+    edctx.fillStyle = "#272b31"; edctx.fillRect(0, 0, ed.width, ed.height);
+    var ox = -(vx - bx0) * zoom;
+    lcd.blit(edctx, ox, RULER, zoom);
+    var X = function (wx) { return (wx - vx) * zoom; };
+    var Y = function (py) { return RULER + py * zoom; };
+    // outside the level: shade
+    edctx.fillStyle = "rgba(40,60,90,0.18)";
+    edctx.fillRect(X(doc.W * 8), RULER, ed.width, 64 * zoom);
+    if (X(0) > 0) edctx.fillRect(0, RULER, X(0), 64 * zoom);
+    // ruler + grid
+    edctx.font = "10px ui-monospace, Consolas, monospace"; edctx.textBaseline = "top";
+    for (c = Math.max(0, c0); c <= c1; c++) {
+      var gx = Math.round(X(c * 8)) + 0.5;
+      if (c % 10 === 0) { edctx.fillStyle = "#9aa3ad"; edctx.fillText(String(c), gx + 2, 2); edctx.fillRect(gx - 0.5, 10, 1, 6); }
+      if (showGrid && zoom >= 3) {
+        edctx.strokeStyle = c % 10 === 0 ? "rgba(60,110,200,0.45)" : "rgba(60,110,200,0.16)";
+        edctx.beginPath(); edctx.moveTo(gx, Y(CY)); edctx.lineTo(gx, Y(GY)); edctx.stroke();
+      }
+    }
+    if (showGrid && zoom >= 3) {
+      edctx.strokeStyle = "rgba(60,110,200,0.16)";
+      for (r = 0; r <= 6; r++) { var gy = Math.round(Y(GY - 8 * r)) + 0.5; edctx.beginPath(); edctx.moveTo(0, gy); edctx.lineTo(ed.width, gy); edctx.stroke(); }
+    }
+    // selection
+    if (sel) {
+      var s = normSel(sel);
+      edctx.fillStyle = "rgba(95,179,255,0.22)"; edctx.strokeStyle = "#5fb3ff"; edctx.lineWidth = 2;
+      var sx0 = X(s.c0 * 8), sy0 = Y(GD.rowTop(s.r1)), sw = (s.c1 - s.c0 + 1) * 8 * zoom, sh = (s.r1 - s.r0 + 1) * 8 * zoom;
+      edctx.fillRect(sx0, sy0, sw, sh); edctx.strokeRect(sx0, sy0, sw, sh); edctx.lineWidth = 1;
+    }
+    // solver overlay
+    var st = stale();
+    if (solveRes) {
+      edctx.globalAlpha = st ? 0.35 : 1;
+      if (solveRes.ok) {
+        if ($("fTrace").checked && solveRes.trace) {
+          edctx.strokeStyle = "#2f7de1"; edctx.lineWidth = Math.max(1, zoom / 2); edctx.beginPath();
+          solveRes.trace.forEach(function (q, i) { var tx = X(q[0] + 3.5), ty = Y(q[1] + 3.5); if (i) edctx.lineTo(tx, ty); else edctx.moveTo(tx, ty); });
+          edctx.stroke(); edctx.lineWidth = 1;
+        }
+        var tight = +$("fTight").value || 60;
+        solveRes.presses.forEach(function (p) {
+          var w = p.w == null ? 99 : p.w * 20;
+          edctx.fillStyle = w < tight ? "#e23b3b" : w < tight * 2 ? "#e89a1c" : "#2fae5a";
+          var px = X(p.x + 3.5), py = Y(CY) - 2;
+          edctx.beginPath(); edctx.moveTo(px, py); edctx.lineTo(px - 5, py - 7); edctx.lineTo(px + 5, py - 7); edctx.fill();
+          if (w < tight) { edctx.fillRect(X(p.x), Y(CY), Math.max(2, zoom), (GY - CY) * zoom * 0.08); }
+        });
+      } else if (solveRes.col != null) {
+        edctx.fillStyle = "rgba(226,59,59,0.25)";
+        edctx.fillRect(X(solveRes.col * 8), Y(CY), 8 * zoom, (GY - CY) * zoom);
+      }
+      edctx.globalAlpha = 1;
+    }
+    // deaths
+    edctx.strokeStyle = "#e23b3b"; edctx.lineWidth = 2;
+    deaths.forEach(function (d) {
+      var dx = X(d.x + 3.5), dy = Y(d.y + 3.5), k = 3 * zoom / 2 + 2;
+      edctx.beginPath(); edctx.moveTo(dx - k, dy - k); edctx.lineTo(dx + k, dy + k); edctx.moveTo(dx + k, dy - k); edctx.lineTo(dx - k, dy + k); edctx.stroke();
+    });
+    edctx.lineWidth = 1;
+    // hover
+    if (hover && hover.r >= 0) {
+      edctx.strokeStyle = "#ffb547"; edctx.lineWidth = 2;
+      edctx.strokeRect(X(hover.c * 8), Y(GD.rowTop(hover.r)), 8 * zoom, 8 * zoom); edctx.lineWidth = 1;
+    }
+  }
+  function normSel(s) {
+    return { c0: Math.min(s.a.c, s.b.c), c1: Math.max(s.a.c, s.b.c), r0: Math.min(s.a.r, s.b.r), r1: Math.max(s.a.r, s.b.r) };
+  }
+  function cellAt(e) {
+    var rc = ed.getBoundingClientRect();
+    var mx = (e.clientX - rc.left) * ed.width / rc.width, my = (e.clientY - rc.top) * ed.height / rc.height;
+    var wx = viewX() + mx / zoom, py = (my - RULER) / zoom;
+    var c = Math.floor(wx / 8), r = Math.floor((GY - 1 - py) / 8);
+    if (py < CY) r = 5; if (py >= GY) r = 0;
+    return { c: c, r: Math.max(0, Math.min(5, r)), inside: py >= CY && py < GY, wx: wx };
+  }
+  var drag = null;
+  ed.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  ed.addEventListener("mousedown", function (e) {
+    var h = cellAt(e);
+    if (h.c < 0) return;
+    if (e.button === 0 && (e.shiftKey || tool === "select")) { sel = { a: { c: h.c, r: h.r }, b: { c: h.c, r: h.r } }; drag = { mode: "sel" }; drawEditor(); return; }
+    if (e.button !== 0 && e.button !== 2) return;
+    pushUndo();
+    drag = { mode: "paint", ch: e.button === 2 ? "." : cur, last: h };
+    setCell(h.c, h.r, drag.ch); changed();
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (e.target === ed || drag) {
+      var h = cellAt(e);
+      hover = h.c >= 0 ? h : null;
+      if (drag && drag.mode === "sel" && h.c >= 0) sel.b = { c: h.c, r: h.r };
+      if (drag && drag.mode === "paint" && h.c >= 0) {
+        // fill the gap of a fast drag
+        var a = drag.last, n = Math.max(Math.abs(h.c - a.c), Math.abs(h.r - a.r));
+        for (var i = 1; i <= n; i++) setCell(Math.round(a.c + (h.c - a.c) * i / n), Math.round(a.r + (h.r - a.r) * i / n), drag.ch);
+        setCell(h.c, h.r, drag.ch); drag.last = h; changed(); return;
+      }
+      showStatus(); drawEditor(); drawPreview();
+    }
+  });
+  window.addEventListener("mouseup", function () { drag = null; });
+  ed.addEventListener("mouseleave", function () { if (!drag) { hover = null; drawEditor(); showStatus(); } });
+  ed.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    scroller.scrollLeft += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY);
+  }, { passive: false });
+  scroller.addEventListener("scroll", function () { drawEditor(); });
+
+  function showStatus() {
+    if (!hover) { $("status").innerHTML = "&nbsp;"; return; }
+    var t = hover.c < doc.W ? doc.cells[hover.r][hover.c] : ".";
+    var tt = GD.TILES.filter(function (x) { return x.ch === t; })[0];
+    var txt = "column " + hover.c + ", row " + (hover.r + 1) + " &middot; x = " + hover.c * 8 + " px &middot; " + (tt ? tt.name : "unknown '" + t + "'");
+    if (sel) { var s = normSel(sel); txt += " &middot; selection " + (s.c1 - s.c0 + 1) + "&times;" + (s.r1 - s.r0 + 1) + " (columns " + s.c0 + "-" + s.c1 + ")"; }
+    $("status").innerHTML = txt;
+  }
+
+  // ---------------- radio preview ----------------
+  var pv = $("pv"), pvctx = pv.getContext("2d"), pvLcd = new Lcd(128, 64);
+  function drawPreview() {
+    if (!doc) return;
+    var L = GD.makeLevel(rowsOf());
+    var col = hover ? hover.c : Math.max(0, Math.floor((viewX() + 28) / 8));
+    var P = GD.newPlayer(); P.x = col * 8;
+    drawWorld(pvLcd, L, P, { playing: false, hud: true, hudLeft: "A1", pct: Math.max(0, Math.min(100, Math.floor(P.x * 100 / L.endX))), attempt: 1 });
+    pvLcd.blit(pvctx, 0, 0, 2);
+  }
+
+  // ---------------- edit operations ----------------
+  function copySel(cut) {
+    if (!sel) { toast("Select an area first (Shift+drag)."); return; }
+    var s = normSel(sel), data = [];
+    for (var r = s.r0; r <= s.r1; r++) {
+      var row = [];
+      for (var c = s.c0; c <= s.c1; c++) row.push(c < doc.W ? doc.cells[r][c] : ".");
+      data.push(row);
+    }
+    clip = { w: s.c1 - s.c0 + 1, h: s.r1 - s.r0 + 1, data: data };
+    if (cut) { pushUndo(); clearArea(s); changed(); }
+    toast((cut ? "Cut " : "Copied ") + clip.w + "x" + clip.h + " cells.");
+  }
+  function clearArea(s) { for (var r = s.r0; r <= s.r1; r++) for (var c = s.c0; c <= Math.min(s.c1, doc.W - 1); c++) doc.cells[r][c] = "."; }
+  function paste() {
+    if (!clip) { toast("Nothing copied yet."); return; }
+    var at = hover && hover.c >= 0 ? hover : sel ? { c: normSel(sel).c0, r: normSel(sel).r0 } : { c: 0, r: 0 };
+    var r0 = Math.min(at.r, 6 - clip.h), transp = $("fTransp").checked;
+    pushUndo();
+    for (var j = 0; j < clip.h; j++) for (var i = 0; i < clip.w; i++) {
+      var ch = clip.data[j][i];
+      if (transp && ch === ".") continue;
+      setCell(at.c + i, r0 + j, ch);
+    }
+    sel = { a: { c: at.c, r: r0 }, b: { c: at.c + clip.w - 1, r: r0 + clip.h - 1 } };
+    changed();
+  }
+  function insertCols() {
+    var n = Math.max(1, +$("fN").value || 1), at = sel ? normSel(sel).c0 : hover ? hover.c : null;
+    if (at == null) { toast("Point at a column or select one first."); return; }
+    at = Math.min(at, doc.W);
+    pushUndo();
+    doc.cells.forEach(function (a) { var add = new Array(n).fill("."); a.splice.apply(a, [at, 0].concat(add)); });
+    doc.W += n; changed();
+    toast("Inserted " + n + " column(s) at " + at + ".");
+  }
+  function deleteCols() {
+    var a0, a1;
+    if (sel) { var s = normSel(sel); a0 = s.c0; a1 = s.c1; }
+    else if (hover) { a0 = hover.c; a1 = hover.c + Math.max(1, +$("fN").value || 1) - 1; }
+    else { toast("Point at a column or select columns first."); return; }
+    if (a0 >= doc.W) return;
+    a1 = Math.min(a1, doc.W - 1);
+    if (a1 - a0 + 1 >= doc.W) { toast("Can't delete every column."); return; }
+    pushUndo();
+    doc.cells.forEach(function (a) { a.splice(a0, a1 - a0 + 1); });
+    doc.W -= a1 - a0 + 1; sel = null; changed();
+    toast("Deleted columns " + a0 + "-" + a1 + ".");
+  }
+
+  // ---------------- import ----------------
+  function importText(text, fname) {
+    var lv;
+    try { lv = GD.parseLevel(text); } catch (e) { toast("Could not read the file: " + e.message, true); return false; }
+    var n = lv.n;
+    var fm = fname && /L(\d+)\.lua$/i.exec(fname); if (fm) n = +fm[1];
+    loadDoc(lv, n);
+    var msg = "Loaded L" + doc.n + (lv.name ? " “" + lv.name + "”" : "") + ".";
+    if (lv.warnings.length) msg += " Warnings: " + lv.warnings.join("; ");
+    toast(msg, lv.warnings.length > 0);
+    return true;
+  }
+  $("bOpen").onclick = function () { $("fileIn").value = ""; $("fileIn").click(); };
+  $("fileIn").onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function () { importText(rd.result, f.name); };
+    rd.readAsText(f, "latin1");
+  };
+  $("bPaste").onclick = function () { $("pasteText").value = ""; $("pasteDlg").showModal(); };
+  $("pasteCancel").onclick = function () { $("pasteDlg").close(); };
+  $("pasteOk").onclick = function () { if (importText($("pasteText").value)) $("pasteDlg").close(); };
+  $("bNew").onclick = function () { if (confirm("Start a new empty level? (Undo history is cleared; download first if you need the current one.)")) newDoc(); };
+  Object.keys(BUNDLED).sort(function (a, b) { return a - b; }).forEach(function (k) {
+    var o = document.createElement("option"); var h = GD.parseHeader(BUNDLED[k]);
+    o.value = k; o.textContent = "L" + k + (h ? " - " + h.name + " (" + h.diff + ")" : ""); $("bundled").appendChild(o);
+  });
+  $("bundled").onchange = function () { var k = this.value; this.value = ""; if (k) importText(BUNDLED[k], "L" + k + ".lua"); };
+
+  // ---------------- meta fields ----------------
+  $("fNum").onchange = function () { var v = Math.max(1, Math.min(99, Math.floor(+this.value || 1))); pushUndo(); doc.n = v; changed(); };
+  $("fName").oninput = function () { doc.name = this.value.replace(/[|\x00-\x1f]/g, ""); changed(); };
+  $("fDiff").oninput = function () { doc.diff = this.value.replace(/[\x00-\x1f]/g, ""); changed(); };
+  $("fName").onfocus = $("fDiff").onfocus = function () { pushUndo(); };
+  $("fW").onchange = function () {
+    var v = Math.max(1, Math.min(4000, Math.floor(+this.value || 1)));
+    if (v === doc.W) return;
+    pushUndo();
+    if (v > doc.W) ensureW(v); else { doc.cells.forEach(function (a) { a.length = v; }); doc.W = v; }
+    changed();
+  };
+  $("fZoom").onchange = function () { var cx = viewX(); zoom = +this.value; resizeEditor(); scroller.scrollLeft = (cx - VIEW_OFF) * zoom; drawEditor(); };
+  $("fGrid").onchange = function () { showGrid = this.checked; drawEditor(); };
+  $("tPaint").onclick = function () { setTool("paint"); };
+  $("tSelect").onclick = function () { setTool("select"); };
+  $("bCopy").onclick = function () { copySel(false); };
+  $("bCut").onclick = function () { copySel(true); };
+  $("bPasteSel").onclick = paste;
+  $("bClearSel").onclick = function () { if (sel) { pushUndo(); clearArea(normSel(sel)); changed(); } };
+  $("bInsCol").onclick = insertCols;
+  $("bDelCol").onclick = deleteCols;
+  $("bUndo").onclick = undo; $("bRedo").onclick = redo;
+
+  // ---------------- keyboard ----------------
+  function typing(e) { var t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"); }
+  window.addEventListener("keydown", function (e) {
+    if (play.running && handlePlayKey(e)) return;
+    if (typing(e)) return;
+    if (document.activeElement === roll && rollKey(e)) return;
+    var k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && (k === "z" || k === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+    if (ctrl && (k === "y" || k === "Y")) { e.preventDefault(); redo(); return; }
+    if (ctrl && (k === "c" || k === "C")) { e.preventDefault(); copySel(false); return; }
+    if (ctrl && (k === "x" || k === "X")) { e.preventDefault(); copySel(true); return; }
+    if (ctrl && (k === "v" || k === "V")) { e.preventDefault(); paste(); return; }
+    if (ctrl) return;
+    if (k === "Delete" || k === "Backspace") { if (sel) { e.preventDefault(); pushUndo(); clearArea(normSel(sel)); changed(); } return; }
+    if (k === "Escape") { sel = null; drawEditor(); return; }
+    if (k.length === 1 && GD.TILE_CHARS.indexOf(k) >= 0) { pick(k); return; }
+    if (k === "ArrowRight") scroller.scrollLeft += 8 * zoom * 4;
+    if (k === "ArrowLeft") scroller.scrollLeft -= 8 * zoom * 4;
+  });
+
+  // ---------------- tabs ----------------
+  var activeTab = "play";
+  document.querySelectorAll("#tabs button").forEach(function (b) {
+    b.onclick = function () {
+      activeTab = b.dataset.tab;
+      document.querySelectorAll("#tabs button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("show", p.id === "p-" + activeTab); });
+      if (activeTab === "export") updateExport();
+      if (activeTab === "music") { drawRoll(); updateMusicInfo(); }
+    };
+  });
+
+  // ---------------- audio ----------------
+  var actx = null;
+  function audio() {
+    if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); }
+    if (actx.state === "suspended") actx.resume();
+    return actx;
+  }
+  function beep(freq, ms, when) {
+    var a = audio(); if (!a || ms <= 0) return;
+    var t0 = when || a.currentTime, o = a.createOscillator(), g = a.createGain();
+    o.type = "square"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.06, t0); g.gain.setValueAtTime(0.06, t0 + ms / 1000 - 0.004); g.gain.linearRampToValueAtTime(0, t0 + ms / 1000);
+    o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + ms / 1000 + 0.01);
+  }
+
+  // ---------------- play-test ----------------
+  var pc = $("pc"), pcctx = pc.getContext("2d"), pcLcd = new Lcd(128, 64);
+  var play = { running: false };
+  function startPlay(prac, autoPresses) {
+    stopMusicPreview();
+    var L = GD.makeLevel(rowsOf());
+    play = { running: true, L: L, prac: !!prac, cps: [], attempts: 0, best: 0, auto: autoPresses ? new Set(autoPresses) : null, last: performance.now() };
+    newAttempt();
+    pc.focus();
+    requestAnimationFrame(frame);
+  }
+  function newAttempt() {
+    play.attempts++;
+    play.P = play.prac && play.cps.length ? GD.clone(play.cps[play.cps.length - 1]) : GD.newPlayer();
+    play.acc = 0; play.pend = false; play.mt = 0; play.state = "play"; play.deadT = 0; play.stepN = 0;
+    play.music = $("fPlayMusic").checked ? GD.makeMusic(doc.m || null, doc.u, function (f, ms) { beep(f, ms); }) : null;
+    if (play.music) play.music(-1);
+  }
+  function pctOf(P) { var v = Math.floor(P.x * 100 / play.L.endX); return Math.max(0, Math.min(100, v)); }
+  function frame(now) {
+    if (!play.running) return;
+    var dt = Math.min(80, now - play.last) * (+$("fSpeed").value || 1);
+    play.last = now;
+    var P = play.P;
+    if (play.state === "play") {
+      play.acc += dt;
+      while (play.acc >= 20) {
+        play.acc -= 20; play.stepN++;
+        var press = play.pend || (play.auto && play.auto.has(play.stepN));
+        play.L.step(P, press);
+        play.mt += 0.02; play.pend = false;
+        if (P.dead) {
+          play.state = "dead"; play.deadT = 0; beep(250, 300);
+          var pct = pctOf(P);
+          if (!play.prac && pct > play.best) play.best = pct;
+          deaths.push({ x: P.x, y: P.y }); if (deaths.length > 12) deaths.shift();
+          drawEditor();
+          $("playinfo").innerHTML = "<span class='bad'>Died at " + pct + "%</span> &middot; column " + Math.floor((P.x + 3) / 8) + " &middot; " + (play.stepN * 0.02).toFixed(2) + " s into the attempt" +
+            "<br>Attempt " + play.attempts + (play.prac ? " (practice, " + play.cps.length + " checkpoints)" : " &middot; best " + play.best + "%");
+          break;
+        }
+        if (P.won) {
+          play.state = "win"; beep(2600, 300);
+          if (!play.prac) play.best = 100;
+          $("playinfo").innerHTML = "<span class='ok'>LEVEL COMPLETE</span> in " + play.attempts + " attempt(s)" + (play.prac ? " (practice)" : "") + ". Space = play again.";
+          break;
+        }
+      }
+      if (play.state === "play" && play.music) play.music(play.mt);
+    } else if (play.state === "dead") {
+      play.deadT += dt / 1000;
+      if (play.deadT > 0.8) { if (play.auto) { play.running = false; } else newAttempt(); }
+    }
+    drawWorld(pcLcd, play.L, play.P, {
+      playing: play.state === "play", dead: play.state === "dead", deadT: play.deadT, hud: true,
+      hudLeft: play.prac ? "PRAC" + play.cps.length : "A" + play.attempts, pct: pctOf(play.P), attempt: play.attempts
+    });
+    if (play.state === "win") { pcLcd.text(14, 16, "LEVEL COMPLETE!", 0x201); pcLcd.text(14, 34, play.prac ? "Practice run" : "Attempts: " + play.attempts); }
+    pcLcd.blit(pcctx, 0, 0, 4);
+    if (play.running) requestAnimationFrame(frame);
+  }
+  function stopPlay() { play.running = false; }
+  function jump() {
+    if (!play.running) return;
+    if (play.state === "win") { play.attempts = 0; newAttempt(); return; }
+    play.pend = true;
+  }
+  function handlePlayKey(e) {
+    if (typing(e) && e.target !== pc) return false;
+    var k = e.key;
+    if (k === " " || k === "ArrowUp" || k === "w" || k === "W" || k === "Enter") { e.preventDefault(); if (!e.repeat) jump(); return true; }
+    if (k === "Escape") { stopPlay(); return true; }
+    if (k === "r" || k === "R") { newAttempt(); return true; }
+    if ((k === "c" || k === "C") && play.prac && play.state === "play" && play.P.gr && play.cps.length < 30) { play.cps.push(GD.clone(play.P)); return true; }
+    if ((k === "x" || k === "X") && play.prac && play.cps.length) { play.cps.pop(); return true; }
+    return false;
+  }
+  pc.addEventListener("mousedown", function (e) { e.preventDefault(); if (play.running) jump(); else startPlay(false); });
+  $("bPlay").onclick = function () { startPlay(false); };
+  $("bPrac").onclick = function () { startPlay(true); };
+  $("bStop").onclick = stopPlay;
+  $("bWatch").onclick = function () {
+    if (!solveRes || !solveRes.ok || stale()) { toast("Run Check beatable on the current level first."); return; }
+    startPlay(false, solveRes.presses.map(function (p) { return p.s; }));
+  };
+
+  // ---------------- solver ----------------
+  var solveJob = null;
+  $("bSolve").onclick = function () {
+    if (solveJob) return;
+    var rows = rowsOf(), sig = rows.join("\n");
+    var gen = GD.solveGen(rows, { minGap: Math.max(1, +$("fGap").value || 5) });
+    var t0 = performance.now();
+    solveJob = { cancel: false };
+    $("bSolve").disabled = true; $("bSolveStop").disabled = false; $("presslist").innerHTML = "";
+    var job = solveJob;
+    (function pump() {
+      if (job.cancel) { finish(null); return; }
+      var t = performance.now(), r;
+      do { r = gen.next(); } while (!r.done && performance.now() - t < 40);
+      if (!r.done) {
+        var v = r.value;
+        $("solveout").innerHTML = v.phase === "search" ? "Searching&hellip; step " + v.step + ", x = " + Math.floor(v.x) + " / " + v.endX + " px, " + v.states + " states" :
+          "Measuring press windows&hellip; " + v.done + " / " + v.of;
+        setTimeout(pump, 0); return;
+      }
+      finish(r.value);
+    })();
+    function finish(res) {
+      solveJob = null; $("bSolve").disabled = false; $("bSolveStop").disabled = true;
+      if (!res) { $("solveout").textContent = "Cancelled."; return; }
+      if (res.ok) res.trace = GD.replay(rows, res.presses.map(function (p) { return p.s; })).trace;
+      solveRes = res; solveSig = sig;
+      showSolve(performance.now() - t0);
+      drawEditor();
+    }
+  };
+  $("bSolveStop").onclick = function () { if (solveJob) solveJob.cancel = true; };
+  $("fTrace").onchange = function () { drawEditor(); };
+  $("fTight").onchange = function () { if (solveRes) showSolve(); drawEditor(); };
+  function showSolve(ms) {
+    var r = solveRes, tight = +$("fTight").value || 60, out = $("solveout");
+    out.className = "note" + (r.ok ? "" : " warn");
+    if (!r.ok) {
+      out.innerHTML = "<b class='bad'>NOT BEATABLE</b> (" + r.text + "). No press sequence gets past column " + (r.col != null ? r.col : "?") +
+        ". The red column in the editor marks where every surviving path ends.";
+      $("presslist").innerHTML = ""; return;
+    }
+    var nT = r.presses.filter(function (p) { return p.w * 20 < tight; }).length;
+    out.innerHTML = "<b class='ok'>BEATABLE</b> &middot; " + r.steps + " steps (" + r.seconds.toFixed(1) + " s) &middot; " + r.presses.length + " presses &middot; " +
+      "tightest press window <b class='" + (r.minW * 20 < tight ? "bad" : "ok") + "'>" + r.minW * 20 + " ms</b> at " + (r.minAt * 0.02).toFixed(1) + " s, average " + (r.avgW * 20).toFixed(0) + " ms" +
+      " &middot; " + (nT ? "<span class='bad'>" + nT + " press(es) under " + tight + " ms</span>" : "no press under " + tight + " ms") +
+      (ms ? " &middot; took " + (ms / 1000).toFixed(1) + " s" : "") +
+      "<br><span style='color:var(--dim)'>Window = how many 20 ms steps earlier/later (up to &plusmn;5) the press still works. This is one route; another route may be easier. Triangles above the editor mark the presses (red = tight). Click a row to scroll there.</span>";
+    var html = "<table class='list'><tr><th>#</th><th>time</th><th>column</th><th>window</th><th>early / late</th></tr>";
+    r.presses.forEach(function (p, i) {
+      html += "<tr data-col='" + p.col + "' class='" + (p.w * 20 < tight ? "tight" : "") + "'><td>" + (i + 1) + "</td><td>" + (p.s * 0.02).toFixed(2) + " s</td><td>" + p.col + "</td><td>" + p.w * 20 + " ms</td><td>-" + p.lo * 20 + " / +" + p.hi * 20 + " ms</td></tr>";
+    });
+    $("presslist").innerHTML = html + "</table>";
+    $("presslist").querySelectorAll("tr[data-col]").forEach(function (tr) {
+      tr.onclick = function () { scroller.scrollLeft = Math.max(0, (+tr.dataset.col * 8 - 60 - VIEW_OFF) * zoom); };
+    });
+  }
+
+  // ---------------- music ----------------
+  var roll = $("roll"), rctx = roll.getContext("2d"), mSel = -1, mPlay = null;
+  roll.tabIndex = 0;
+  var UNITPX = 14, ROWPX = 6;
+  function tokens() { return GD.tuneTokens(doc.m); }
+  function setTokens(list) { pushUndo(); doc.m = list.join(" "); changed(); drawRoll(); updateMusicInfo(); }
+  function rawList() { return (doc.m || "").split(/\s+/).filter(Boolean); }
+  function rollRange(tk) {
+    var lo = 999, hi = -1;
+    tk.forEach(function (t) { if (t.midi != null) { lo = Math.min(lo, t.midi); hi = Math.max(hi, t.midi); } });
+    if (hi < 0) { lo = 60; hi = 72; }
+    lo -= 4; hi += 4;
+    if (hi - lo < 24) { var mid = (hi + lo) >> 1; lo = mid - 12; hi = mid + 12; }
+    return { lo: Math.max(12, lo), hi: Math.min(119, hi) };
+  }
+  var NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  function drawRoll(playT) {
+    if (!doc) return;
+    var tk = tokens(), rg = rollRange(tk), total = 0;
+    tk.forEach(function (t) { total += t.len; });
+    var W = Math.max(900, 40 + (total + 4) * UNITPX), H = (rg.hi - rg.lo + 1) * ROWPX;
+    if (roll.width !== W) roll.width = W;
+    if (roll.height !== H) roll.height = H;
+    rctx.fillStyle = "#15181c"; rctx.fillRect(0, 0, W, H);
+    rctx.font = "9px ui-monospace, Consolas, monospace"; rctx.textBaseline = "middle";
+    for (var m = rg.lo; m <= rg.hi; m++) {
+      var y = (rg.hi - m) * ROWPX, black = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0;
+      rctx.fillStyle = black ? "#1b1f24" : "#20252b"; rctx.fillRect(40, y, W - 40, ROWPX);
+      if (m % 12 === 0) { rctx.fillStyle = "#3a4250"; rctx.fillRect(40, y + ROWPX - 1, W - 40, 1); rctx.fillStyle = "#9aa3ad"; rctx.fillText("C" + (m / 12 - 1), 4, y + ROWPX / 2); }
+    }
+    var x = 40, u = 0;
+    tk.forEach(function (t, i) {
+      var w = t.len * UNITPX;
+      rctx.fillStyle = "rgba(255,255,255,0.04)"; if (i % 2) rctx.fillRect(x, 0, w, H);
+      if (t.midi != null && t.ok) {
+        var y = (rg.hi - t.midi) * ROWPX;
+        rctx.fillStyle = i === mSel ? "#ffb547" : "#5fb3ff"; rctx.fillRect(x + 1, y, Math.max(2, w - 2), ROWPX);
+      } else {
+        rctx.fillStyle = i === mSel ? "rgba(255,181,71,0.5)" : t.ok ? "rgba(154,163,173,0.25)" : "rgba(255,107,107,0.45)";
+        rctx.fillRect(x + 1, H - 8, Math.max(2, w - 2), 6);
+      }
+      if (i === mSel) { rctx.strokeStyle = "#ffb547"; rctx.strokeRect(x + 0.5, 0.5, w - 1, H - 1); }
+      x += w; u += t.len;
+    });
+    if (playT != null) { rctx.fillStyle = "#6fdc8c"; rctx.fillRect(40 + playT * UNITPX, 0, 2, H); }
+    var sv = mSel >= 0 && tk[mSel] ? tk[mSel] : null;
+    $("mSel").textContent = sv ? "selected #" + (mSel + 1) + ": " + sv.raw + (sv.ok ? "" : "  (" + sv.msg + ")") : "";
+  }
+  function updateMusicInfo() {
+    var tk = tokens(), units = 0, U = Number(doc.u);
+    if (doc.u === "" || isNaN(U)) U = 0.1;
+    tk.forEach(function (t) { units += t.len; });
+    $("mInfo").textContent = tk.length + " tokens, " + units + " units = " + (units * U).toFixed(2) + " s per loop" + (doc.m ? "" : " (no tune: the level is silent and u/m are left out of the file)");
+    var bad = tk.map(function (t, i) { return t.ok ? null : "#" + (i + 1) + " " + t.raw + ": " + t.msg; }).filter(Boolean);
+    var uerr = isNaN(Number(doc.u)) || doc.u === "" || Number(doc.u) <= 0 ? "u must be a positive number (seconds per unit), e.g. 0.1" : "";
+    $("mErr").innerHTML = (uerr ? "<div class='bad'>" + uerr + "</div>" : "") + (bad.length ? "<div class='warn'>" + bad.join("<br>") + "</div>" : (doc.m ? "<span class='ok'>All tokens valid.</span>" : ""));
+  }
+  function tokenAtX(px) {
+    var tk = tokens(), x = 40;
+    for (var i = 0; i < tk.length; i++) { var w = tk[i].len * UNITPX; if (px >= x && px < x + Math.max(w, 4)) return i; x += w; }
+    return -1;
+  }
+  function noteStr(midi, len) { var oct = Math.floor(midi / 12) - 1; return NAMES[midi % 12] + oct + len; }
+  roll.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  roll.addEventListener("mousedown", function (e) {
+    roll.focus();
+    var rc = roll.getBoundingClientRect(), px = (e.clientX - rc.left) * roll.width / rc.width, py = (e.clientY - rc.top) * roll.height / rc.height;
+    var i = tokenAtX(px); if (i < 0) { mSel = -1; drawRoll(); return; }
+    var tk = tokens(), list = rawList(), t = tk[i], rg = rollRange(tk);
+    var midi = rg.hi - Math.floor(py / ROWPX);
+    var len = Math.max(1, Math.min(9, t.len || 1));
+    if (e.button === 2) { list[i] = "R" + len; mSel = i; setTokens(list); return; }
+    if (mSel === i || t.midi == null || !t.ok) {
+      if (midi >= 12 && midi <= 119) { list[i] = noteStr(midi, len); mSel = i; setTokens(list); beep(Math.floor(440 * Math.pow(2, (midi - 69) / 12)), 150); return; }
+    }
+    mSel = i; drawRoll();
+    if (t.f > 0) beep(Math.floor(t.f), 150);
+  });
+  roll.addEventListener("wheel", function (e) {
+    var rc = roll.getBoundingClientRect(), i = tokenAtX((e.clientX - rc.left) * roll.width / rc.width);
+    if (i < 0) return;
+    e.preventDefault(); mSel = i; changeLen(e.deltaY < 0 ? 1 : -1);
+  }, { passive: false });
+  function changeLen(d) {
+    var list = rawList(), tk = tokens(), t = tk[mSel]; if (!t) return;
+    var len = Math.max(1, Math.min(9, (t.len || 1) + d));
+    if (t.midi != null) list[mSel] = noteStr(t.midi, len); else list[mSel] = "R" + len;
+    setTokens(list);
+  }
+  function changePitch(d) {
+    var list = rawList(), t = tokens()[mSel]; if (!t || t.midi == null) return;
+    var midi = Math.max(12, Math.min(119, t.midi + d));
+    list[mSel] = noteStr(midi, Math.max(1, t.len)); setTokens(list);
+    beep(Math.floor(440 * Math.pow(2, (midi - 69) / 12)), 150);
+  }
+  function insertTok(s) { var list = rawList(), at = mSel >= 0 ? mSel + 1 : list.length; list.splice(at, 0, s); mSel = at; setTokens(list); }
+  function moveTok(d) { var list = rawList(), j = mSel + d; if (mSel < 0 || j < 0 || j >= list.length) return; var t = list[mSel]; list[mSel] = list[j]; list[j] = t; mSel = j; setTokens(list); }
+  function delTok() { var list = rawList(); if (mSel < 0 || mSel >= list.length) return; list.splice(mSel, 1); mSel = Math.min(mSel, list.length - 1); setTokens(list); }
+  function rollKey(e) {
+    var k = e.key;
+    if (k === "ArrowUp") { changePitch(1); } else if (k === "ArrowDown") { changePitch(-1); }
+    else if (k === "ArrowLeft") { mSel = Math.max(0, mSel - 1); drawRoll(); } else if (k === "ArrowRight") { mSel = Math.min(tokens().length - 1, mSel + 1); drawRoll(); }
+    else if (k === "+" || k === "=") changeLen(1); else if (k === "-") changeLen(-1);
+    else if (k === "Delete" || k === "Backspace") delTok();
+    else return false;
+    e.preventDefault(); return true;
+  }
+  $("mAdd").onclick = function () { var t = tokens()[mSel]; insertTok(t && t.midi != null ? noteStr(t.midi, Math.max(1, t.len)) : "C52"); };
+  $("mRest").onclick = function () { insertTok("R1"); };
+  $("mDel").onclick = delTok;
+  $("mLm").onclick = function () { changeLen(-1); }; $("mLp").onclick = function () { changeLen(1); };
+  $("mDn").onclick = function () { changePitch(-1); }; $("mUp").onclick = function () { changePitch(1); };
+  $("mOdn").onclick = function () { changePitch(-12); }; $("mOup").onclick = function () { changePitch(12); };
+  $("mLeft").onclick = function () { moveTok(-1); }; $("mRight").onclick = function () { moveTok(1); };
+  $("fM").onfocus = function () { pushUndo(); };
+  $("fM").oninput = function () { doc.m = this.value.replace(/[\r\n\t]+/g, " "); changed(); drawRoll(); updateMusicInfo(); };
+  $("fU").onfocus = function () { pushUndo(); };
+  $("fU").oninput = function () { doc.u = this.value.trim(); changed(); updateMusicInfo(); };
+
+  function playMusicPreview() {
+    stopMusicPreview();
+    var a = audio(); if (!a) { toast("No WebAudio in this browser."); return; }
+    var tk = tokens(), units = 0;
+    tk.forEach(function (x) { units += x.len; });
+    if (!tk.length || units <= 0) { toast("The tune is empty (or every token has length 0)."); return; }
+    var U = Number(doc.u); if (doc.u === "" || isNaN(U) || U <= 0) U = 0.1;
+    var st = { idx: 0, t: a.currentTime + 0.05, start: a.currentTime + 0.05, unit: 0, loop: 0, timer: null };
+    mPlay = st;
+    function sched() {
+      var a2 = audio();
+      while (st.t < a2.currentTime + 0.25) {
+        if (st.idx >= tk.length) {
+          if (!$("fLoop").checked) { break; }
+          st.idx = 0;
+        }
+        var t = tk[st.idx], d = t.len * U;
+        if (t.f > 0) beep(Math.floor(t.f), Math.floor(d * 1000) - 20, st.t);
+        st.t += d; st.idx++;
+        if (d <= 0 && st.idx >= tk.length) break;
+      }
+      var total = 0; tk.forEach(function (x) { total += x.len; });
+      var el = (a2.currentTime - st.start) / U;
+      drawRoll(total ? el % total : 0);
+      if (st.idx >= tk.length && !$("fLoop").checked && a2.currentTime > st.t) { stopMusicPreview(); return; }
+      st.timer = setTimeout(sched, 50);
+    }
+    sched();
+  }
+  function stopMusicPreview() { if (mPlay) { clearTimeout(mPlay.timer); mPlay = null; drawRoll(); } }
+  $("bMPlay").onclick = playMusicPreview;
+  $("bMStop").onclick = stopMusicPreview;
+
+  // ---------------- export ----------------
+  function exportWarnings() {
+    var w = [], hdr = "-- @" + doc.name + "|" + doc.diff;
+    if (!doc.name) w.push("No name: the picker will show “Level " + doc.n + "”.");
+    if (hdr.length > 80) w.push("The first line is " + hdr.length + " bytes; the radio reads 80, so the difficulty gets cut.");
+    if (doc.name.length > 14) w.push("Long name: the picker shows it in MIDSIZE, about 14 characters fit on the screen.");
+    if (doc.m && tokens().some(function (t) { return !t.ok; })) w.push("The tune has invalid tokens (see the Music tab).");
+    if (doc.m && (isNaN(Number(doc.u)) || Number(doc.u) <= 0)) w.push("u is not a positive number.");
+    if (!solveRes || stale()) w.push("Not checked with “Check beatable” since the last change.");
+    else if (!solveRes.ok) w.push("The solver says this level is NOT beatable.");
+    var unknown = rowsOf().join("").replace(new RegExp("[" + GD.TILE_CHARS.replace(/[\^\]\\-]/g, "\\$&") + "]", "g"), "");
+    if (unknown) w.push("Unknown tile characters '" + Array.from(new Set(unknown)).join("") + "' (empty in the game).");
+    var bytes = exportText().length;
+    if (bytes > 6000) w.push("File is " + bytes + " bytes; the biggest stock level is ~1.8 KB. Very long levels cost RAM on the radio (all rows stay in memory while playing).");
+    if (BUNDLED[doc.n]) w.push("L" + doc.n + " already exists in the game (" + (GD.parseHeader(BUNDLED[doc.n]) || { name: "?" }).name + "). Saving as L" + doc.n + ".lua replaces it; for a new level use L" + nextFreeNumber() + ".lua.");
+    return w;
+  }
+  function updateExport() {
+    var txt = exportText();
+    $("expText").value = txt;
+    $("expinfo").textContent = txt.length + " bytes, LF line endings";
+    var w = exportWarnings();
+    $("expwarn").innerHTML = w.length ? "<div class='note warn'>" + w.join("<br>") + "</div>" : "<div class='note'><span class='ok'>No problems found.</span></div>";
+  }
+  function download() {
+    var blob = new Blob([exportText()], { type: "text/plain" }), a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "L" + doc.n + ".lua";
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast("Saved L" + doc.n + ".lua. Copy it to /SCRIPTS/GAMES/GDASH/ on the SD card and delete L" + doc.n + ".luac if present.");
+  }
+  function copyOut() {
+    var txt = exportText();
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      ta.remove(); toast(ok ? "Copied L" + doc.n + ".lua text." : "Copy failed: select the text in the Export tab and copy it.", !ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast("Copied L" + doc.n + ".lua text."); }, fallback);
+    else fallback();
+  }
+  $("bDownload").onclick = $("bDownload2").onclick = download;
+  $("bCopyOut").onclick = $("bCopy2").onclick = copyOut;
+
+  // ---------------- misc ----------------
+  var toastT;
+  function toast(msg, warn) {
+    var t = $("toast"); t.textContent = msg; t.style.borderColor = warn ? "var(--warn)" : "var(--accent)"; t.style.display = "block";
+    clearTimeout(toastT); toastT = setTimeout(function () { t.style.display = "none"; }, warn ? 9000 : 4000);
+  }
+  window.addEventListener("resize", resizeEditor);
+
+  buildPalette();
+  pick("#");
+  var draft = null;
+  try { draft = localStorage.getItem("gdash-editor-draft"); } catch (e) { draft = null; }
+  if (draft) { try { restore(draft); changed(true); toast("Restored your last draft (L" + doc.n + "). Use New or Open to start something else."); } catch (e) { newDoc(); } }
+  else newDoc();
+  resizeEditor();
+  drawWorld(pcLcd, GD.makeLevel(rowsOf()), GD.newPlayer(), { playing: false, hud: true, hudLeft: "A1", pct: 0, attempt: 1 });
+  pcLcd.blit(pcctx, 0, 0, 4);
+})();
+</script>
+</body>
+</html>

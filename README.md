@@ -44,4 +44,6 @@ Games live in `SCRIPTS/GAMES/`; the launcher is `SCRIPTS/TOOLS/Games.lua`. To ad
 
 More games: https://github.com/EdgeTX/lua-scripts (pick ones made for 128x64 B&W screens).
 
+Make your own Geometry Dash levels or Rhythm songs: see [editors/README.md](editors/README.md) (browser editors, no install).
+
 Writing or fixing a game? Read [GAME_DEV_GUIDELINES.md](GAME_DEV_GUIDELINES.md) first: radio memory, the missing `table` library, input, timing and how to test with `tools/tx12sim`.

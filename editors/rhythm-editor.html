@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TX12 Rhythm Editor</title>
+<style>
+:root{--bg:#15181d;--panel:#1d2128;--panel2:#252a33;--line:#343b47;--text:#e3e7ee;--dim:#97a1b0;--acc:#5fb3ff;--ok:#6fd08c;--warn:#f2c14e;--err:#ff6b6b;
+--tap:#4fc3f7;--hold:#ffb74d;--slider:#c084fc;--mus:#7d8b99;--rest:#3a414d;--lcd:#b9c7a4;--lcdpx:#1f2a1a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+header h1{font-size:15px;margin:0 12px 0 0;white-space:nowrap}
+button,select,input,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:5px}
+button{padding:4px 9px;cursor:pointer}button:hover{border-color:var(--acc)}button.pri{background:#24527a;border-color:#2f6fa5}
+button:disabled{opacity:.45;cursor:default}
+input,select{padding:3px 5px}input[type=number]{width:70px}textarea{width:100%;padding:6px;font-family:Consolas,monospace;font-size:12px}
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 540px;gap:10px;padding:10px}
+@media(max-width:1150px){.wrap{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+.card h2{font-size:13px;margin:0 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.row label{display:flex;gap:4px;align-items:center;color:var(--dim)}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+#rollWrap{overflow-x:auto;overflow-y:hidden;border:1px solid var(--line);border-radius:6px;background:#11141a}
+#roll{display:block;cursor:default}
+#field{width:100%;max-width:520px;image-rendering:pixelated;border-radius:6px;display:block;background:var(--lcd);cursor:crosshair}
+.mono{font-family:Consolas,monospace}
+.small{font-size:12px;color:var(--dim)}
+#val{max-height:220px;overflow:auto;margin:0;padding:0;list-style:none}
+#val li{padding:3px 6px;border-left:3px solid var(--line);margin-bottom:3px;cursor:pointer;background:var(--panel2);border-radius:3px}
+#val li.err{border-color:var(--err)}#val li.warn{border-color:var(--warn)}#val li.info{border-color:var(--acc)}#val li.ok{border-color:var(--ok)}
+.badge{display:inline-block;padding:0 6px;border-radius:9px;font-size:11px;background:var(--panel2);border:1px solid var(--line)}
+.legend span{display:inline-flex;align-items:center;gap:4px;margin-right:10px}.legend i{width:12px;height:10px;border-radius:2px;display:inline-block}
+.note{background:#2a2414;border:1px solid #5a4a1f;border-radius:6px;padding:6px 8px;font-size:12px}
+details summary{cursor:pointer;font-weight:600}
+#help li{margin-bottom:3px}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:11px}
+#toast{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#24527a;padding:7px 14px;border-radius:6px;display:none;z-index:20}
+#results{font-family:Consolas,monospace}
+</style>
+</head>
+<body>
+<header>
+  <h1>TX12 Rhythm Editor</h1>
+  <button id="bNew">New</button>
+  <select id="bBuiltin" title="Load a copy of a shipped song"><option value="">Built-in songs…</option></select>
+  <button id="bImport">Import .lua…</button><input type="file" id="fileIn" accept=".lua,.txt" hidden>
+  <button id="bPaste">Paste…</button>
+  <span class="sep"></span>
+  <button id="bUndo" title="Ctrl+Z">Undo</button><button id="bRedo" title="Ctrl+Y">Redo</button>
+  <span class="sep"></span>
+  <button id="bPlay" class="pri" title="Space">&#9654; Play</button>
+  <button id="bHome" title="Playhead to the start (with approach pre-roll)">&#9198;</button>
+  <label class="small"><input type="checkbox" id="cLoop"> loop selection</label>
+  <label class="small">speed <select id="sSpeed"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option></select>x</label>
+  <label class="small">vol <input type="range" id="rVol" min="0" max="100" value="25" style="width:70px"></label>
+  <span class="sep"></span>
+  <button id="bExport" class="pri">Export s<span id="slotLbl">6</span>.lua</button>
+  <button id="bCopy">Copy text</button>
+</header>
+
+<div class="wrap">
+<main>
+  <div class="card">
+    <h2>Song</h2>
+    <div class="row">
+      <label>Name <input id="iName" style="width:170px" maxlength="40"></label>
+      <label>Difficulty <input id="iDiff" list="diffs" style="width:90px" maxlength="20"></label>
+      <datalist id="diffs"><option>EASY</option><option>NORMAL</option><option>HARD</option><option>EXPERT</option></datalist>
+      <label title="File number on the card: RHYTHM/s&lt;n&gt;.lua. Also seeds the circle placement.">File s<input type="number" id="iSlot" min="1" max="99" value="6" style="width:52px">.lua</label>
+    </div>
+    <div class="row">
+      <label title="Seconds per length unit (the file's u)">u (s/unit) <input type="number" id="iU" step="0.01" min="0.02"></label>
+      <label title="Units per beat, only for the grid, BPM and quantize">units/beat <input type="number" id="iUpb" min="1" max="8" value="2" style="width:48px"></label>
+      <label>BPM <input type="number" id="iBpm" step="1" min="10"></label>
+      <label title="Approach time: how long a circle is on screen before its hit time (the file's a)">a (approach s) <input type="number" id="iA" step="0.05" min="0.2"></label>
+      <span class="small" id="stats"></span>
+    </div>
+    <details><summary class="small">Extra comment lines (kept as-is under the header)</summary>
+      <textarea id="tComments" rows="3"></textarea></details>
+  </div>
+
+  <div class="card">
+    <h2>Melody / chart <span class="legend small" style="text-transform:none;letter-spacing:0;font-weight:400;margin-left:10px">
+      <span><i style="background:var(--tap)"></i>tap</span><span><i style="background:var(--hold)"></i>hold (h)</span><span><i style="background:var(--slider)"></i>slider (s)</span><span><i style="background:var(--mus)"></i>music only (x)</span><span><i style="background:var(--rest)"></i>rest</span></span></h2>
+    <div class="row small">
+      <label>zoom <input type="range" id="rZoom" min="6" max="48" value="18" style="width:90px"></label>
+      <label>new note length <select id="sNewLen"></select></label>
+      <span>Click select, <kbd>Shift</kbd>+click range, drag up/down = pitch, drag sideways = move, drag right edge = length, double-click empty = add note, click ruler = playhead.</span>
+    </div>
+    <div id="rollWrap"><canvas id="roll" height="300"></canvas></div>
+    <div class="row" style="margin-top:8px" id="insp"></div>
+    <div class="row">
+      <button id="bAddN">+ Note after</button><button id="bAddR">+ Rest after</button><button id="bDup">Duplicate</button><button id="bDel">Delete</button>
+      <span class="sep"></span>
+      Transpose <button data-tr="-12">-oct</button><button data-tr="-1">-1</button><button data-tr="1">+1</button><button data-tr="12">+oct</button>
+      <select id="sTrScope"><option value="sel">selection</option><option value="all">whole song</option></select>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Helpers</h2>
+    <div class="row"><label style="flex:1">Note names <input id="iNotes" style="flex:1;min-width:260px" placeholder="E4 8, D4 8h, C4 4s, R 2   (length = units 1-9; h hold, s slider, x music only)"></label>
+      <select id="sNotesMode"><option value="after">insert after selection</option><option value="replace">replace selection</option><option value="append">append at end</option><option value="all">replace whole song</option></select>
+      <button id="bNotes">Apply</button></div>
+    <div class="row"><label>Quantize to grid of <input type="number" id="iQ" min="1" max="8" value="2" style="width:48px"> units</label>
+      <select id="sQScope"><option value="sel">selection</option><option value="all">whole song</option></select><button id="bQuant">Quantize</button>
+      <span class="small">snaps note starts to the grid; lengths over 9 units get a rest after them.</span></div>
+    <details><summary class="small">Melody as text (the file's m string, one line per file line)</summary>
+      <textarea id="tMel" rows="6"></textarea>
+      <div class="row" style="margin-top:4px"><button id="bMelApply">Apply text</button><span class="small">Tokens: note+octave+length[mark], e.g. <span class="mono">D#53h</span>; <span class="mono">R2</span> = rest.</span></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Validator <span id="valSum" class="badge"></span></h2>
+    <ul id="val"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Export</h2>
+    <div class="note" id="exportNote"></div>
+    <div class="row" style="margin-top:8px"><span class="small" id="expInfo"></span></div>
+    <textarea id="tOut" rows="9" readonly></textarea>
+  </div>
+</main>
+
+<aside>
+  <div class="card">
+    <h2>Play field (128 x 64)</h2>
+    <canvas id="field" width="520" height="260"></canvas>
+    <div class="row small" style="margin-top:6px">
+      <label>preview as <select id="sModel"><option value="auto">perfect play (auto)</option><option value="idle">no input (all missed)</option></select></label>
+      <label>radio frame <select id="sTick"><option value="3">30 ms</option><option value="5" selected>50 ms</option><option value="8">80 ms</option></select></label>
+      <label><input type="checkbox" id="cPath" checked> show next 6</label>
+    </div>
+    <div class="small" id="fieldInfo"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="bTest" class="pri">Play-test</button>
+      <label class="small">frames <select id="sTestTick"><option value="0">browser (smooth)</option><option value="3">30 ms</option><option value="5">50 ms</option><option value="8" selected>80 ms (radio-like)</option></select></label>
+      <label class="small">speed <select id="sTestSpeed"><option>0.5</option><option>0.75</option><option selected>1</option></select>x</label>
+    </div>
+    <div class="small">Mouse = right stick cursor. <kbd>Z</kbd> / <kbd>Space</kbd> / left mouse button = SA, <kbd>X</kbd> = SD. <kbd>Esc</kbd> stops.</div>
+    <div id="results" class="small"></div>
+  </div>
+  <div class="card">
+    <h2>Selected note</h2>
+    <div id="selInfo" class="small mono">-</div>
+  </div>
+  <div class="card" id="help">
+    <h2>Help</h2>
+    <details open><summary>How the game reads a song</summary><ul class="small">
+      <li>File <span class="mono">RHYTHM/s&lt;n&gt;.lua</span>, first line <span class="mono">-- @Name|Difficulty</span> (shown in the picker), then <span class="mono">return { u = …, a = …, m = "tokens…" }</span>.</li>
+      <li>Token = note name (<span class="mono">C C# D D# E F F# G G# A A# B</span>, no flats) + octave digit + length digit (1-9 units of <i>u</i> seconds) + optional mark: none = tap circle, <span class="mono">h</span> = hold, <span class="mono">s</span> = slider, <span class="mono">x</span> = played but not charted. <span class="mono">R&lt;n&gt;</span> = rest.</li>
+      <li>Every charted note is a circle hit at its start time. Holds/sliders end at <i>start + len − min(0.3, len/4)</i> seconds.</li>
+      <li>Windows: 300 = ±0.10 s, 100 = ±0.18 s, 50 = ±0.26 s, later = miss. Slider: off the ball (13 px) for &gt;0.2 s caps it at 100, &gt;0.45 s = miss. Releasing a hold early = miss.</li>
+      <li>Circle positions are not in the file: the game places each one 18-40 px from the previous one with a fixed seed (<i>file number × 1013 + 7</i>), avoiding circles still on screen. So the <b>same song gets different positions under another file number</b>, and positions can shift a little with how you play (hit circles leave the screen sooner). The preview runs the game's own algorithm with the chosen play model; play-test runs it live.</li>
+      <li>The format has <b>no explicit x/y positions</b>, so the editor cannot move circles by hand. Change the note timing or the file number to get a different layout.</li>
+    </ul></details>
+    <details><summary>Adding the song to the radio</summary><ul class="small">
+      <li>Save as the <b>next free number</b>: s6.lua, s7.lua, … (the game counts s1, s2, … until one is missing, max 99). No game change needed. A gap (e.g. s8 without s7) hides everything after it.</li>
+      <li>Copy to the SD card as <span class="mono">/SCRIPTS/GAMES/RHYTHM/s&lt;n&gt;.lua</span>. If you replace an existing file, delete its <span class="mono">s&lt;n&gt;.luac</span>.</li>
+      <li>Best scores in <span class="mono">rhythm.dat</span> are stored by number, so replacing s3 keeps s3's old best score.</li>
+    </ul></details>
+    <details><summary>Keys</summary><ul class="small">
+      <li><kbd>Space</kbd> play/stop · <kbd>Home</kbd> to start · <kbd>←</kbd><kbd>→</kbd> select prev/next · <kbd>↑</kbd><kbd>↓</kbd> pitch (<kbd>Shift</kbd> = octave)</li>
+      <li><kbd>1</kbd>-<kbd>9</kbd> length · <kbd>T</kbd> tap <kbd>H</kbd> hold <kbd>S</kbd> slider <kbd>X</kbd> music only · <kbd>N</kbd> add note · <kbd>R</kbd> add rest · <kbd>B</kbd> file line break after · <kbd>Del</kbd> delete · <kbd>Ctrl+Z</kbd>/<kbd>Ctrl+Y</kbd></li>
+      <li>Work is autosaved in this browser.</li>
+    </ul></details>
+  </div>
+</aside>
+</div>
+
+<div id="pasteDlg" style="display:none;position:fixed;inset:0;background:#0009;z-index:30">
+  <div class="card" style="max-width:720px;margin:60px auto">
+    <h2>Paste an s&lt;n&gt;.lua</h2>
+    <textarea id="tPaste" rows="14"></textarea>
+    <div class="row" style="margin-top:6px"><button id="bPasteOk" class="pri">Import</button><button id="bPasteCancel">Cancel</button></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script id="core">
+/* TX12 Rhythm core: song file parse/export, the game's token decoder, a frame-exact
+   port of Game-Rhythm.lua's play loop (placement, judging), bots and LCD drawing.
+   No DOM use, so node can load it (module.exports). */
+var TXR = (function () {
+  "use strict";
+  var NOTES = "C C#D D#E F F#G G#A A#B ";
+  var NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  var K = { R: 7, HR: 11, FOLLOW: 13, RING: 21, W300: 0.10, W100: 0.18, W50: 0.26, LCD_W: 128, LCD_H: 64 };
+  var DEF_COMMENTS = ["-- token: note+octave+length[mark]; length in units of u seconds",
+    "-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest"];
+
+  // ---------- token decoding, exactly like nextTok() ----------
+  function luaTokens(m) {
+    var out = [], re = /[^ \t\n\v\f\r]+/g, x;
+    while ((x = re.exec(m)) !== null) out.push({ w: x[0], s: x.index, e: x.index + x[0].length });
+    return out;
+  }
+  function decodeToken(w) {
+    if (w.charAt(0) === "R") {
+      var c = w.charAt(1);
+      return { f: 0, len: /^[0-9]$/.test(c) ? +c : 1, mk: "x", rest: true, midi: null };
+    }
+    var m = /^([A-Z]#?)([0-9])([0-9])([a-z]?)$/.exec(w);
+    if (!m) return { f: 0, len: 1, mk: "x", bad: true, midi: null };
+    var nm = m[1].length === 1 ? m[1] + " " : m[1];
+    var i = NOTES.indexOf(nm);
+    var unk = i < 0;
+    i = unk ? 19 : i + 1;
+    var midi = 12 * (+m[2] + 1) + (i - 1) / 2;
+    return { f: 440 * Math.pow(2, (midi - 69) / 12), len: +m[3], mk: m[4], midi: midi, unknownName: unk };
+  }
+  function midiName(midi) { return NAMES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1); }
+
+  // ---------- editor song model <-> file text ----------
+  // song = {name, diff, comments[], u, a, uStr, aStr, items[]}
+  // item = {t:"n", p:"C#", o:5, l:2, mk:"", br:false} | {t:"r", l:2, br} | {t:"raw", text, br}
+  function itemFromToken(w) {
+    var m = /^([A-G]#?)([0-9])([0-9])([a-z]?)$/.exec(w);
+    if (m && NAMES.indexOf(m[1]) >= 0) return { t: "n", p: m[1], o: +m[2], l: +m[3], mk: m[4], br: false };
+    m = /^R([0-9])$/.exec(w);
+    if (m) return { t: "r", l: +m[1], br: false };
+    return { t: "raw", text: w, br: false };
+  }
+  function itemToken(it) {
+    if (it.t === "n") return it.p + it.o + it.l + (it.mk || "");
+    if (it.t === "r") return "R" + it.l;
+    return it.text;
+  }
+  function itemMidi(it) { return it.t === "n" ? 12 * (it.o + 1) + NAMES.indexOf(it.p) : null; }
+  function setMidi(it, midi) { it.p = NAMES[midi % 12]; it.o = Math.floor(midi / 12) - 1; }
+  function newSong() {
+    return { name: "New Song", diff: "NORMAL", comments: DEF_COMMENTS.slice(), u: 0.25, a: 1.4, uStr: null, aStr: null, items: [] };
+  }
+  function readLuaString(src, i) { // returns [value, nextIndex] or null
+    var q = src.charAt(i);
+    if (q === '"' || q === "'") {
+      var out = "", j = i + 1;
+      while (j < src.length && src.charAt(j) !== q) {
+        var ch = src.charAt(j);
+        if (ch === "\\") {
+          var n = src.charAt(j + 1);
+          var map = { n: "\n", t: "\t", r: "\r", "\\": "\\", '"': '"', "'": "'" };
+          if (map[n] !== undefined) { out += map[n]; j += 2; continue; }
+          if (/[0-9]/.test(n)) { var dm = /^[0-9]{1,3}/.exec(src.substr(j + 1, 3)); out += String.fromCharCode(+dm[0]); j += 1 + dm[0].length; continue; }
+          out += n; j += 2; continue;
+        }
+        out += ch; j++;
+      }
+      if (j >= src.length) return null;
+      return [out, j + 1];
+    }
+    var lm = /^\[(=*)\[/.exec(src.substr(i, 20));
+    if (lm) {
+      var close = "]" + lm[1] + "]", st = i + lm[0].length, en = src.indexOf(close, st);
+      if (en < 0) return null;
+      var v = src.substring(st, en);
+      if (v.charAt(0) === "\n") v = v.substr(1);
+      return [v, en + close.length];
+    }
+    return null;
+  }
+  function parseSong(text) {
+    text = String(text).replace(/^﻿/, "").replace(/\r\n?/g, "\n");
+    var lines = text.split("\n"), i = 0, hdr = [];
+    while (i < lines.length && /^\s*--/.test(lines[i])) hdr.push(lines[i++]);
+    var song = newSong();
+    song.comments = [];
+    song.name = ""; song.diff = "";
+    var hm = hdr.length ? /^-- @([^|\x00-\x1f\x7f]*)\|([^\x00-\x1f\x7f]*)$/.exec(hdr[0]) : null;
+    if (hm) { song.name = hm[1]; song.diff = hm[2]; song.comments = hdr.slice(1); song.hadHeader = true; }
+    else {
+      song.comments = hdr.slice();
+      var om = hdr.length ? /^--\s?(.*?)\.\s+([A-Z][A-Z ]*)\s*$/.exec(hdr[0]) : null;
+      if (om) { song.name = om[1]; song.diff = om[2]; } else song.name = "Untitled";
+      song.hadHeader = false;
+    }
+    var body = lines.slice(i).join("\n");
+    var um = /(^|[^\w])u\s*=\s*(-?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)/.exec(body);
+    var am = /(^|[^\w])a\s*=\s*(-?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)/.exec(body);
+    if (um) { song.u = parseFloat(um[2]); song.uStr = um[2]; } else { song.u = 0.25; song.uStr = null; song.uMissing = true; }
+    if (am) { song.a = parseFloat(am[2]); song.aStr = am[2]; } else { song.a = 1.4; song.aStr = null; song.aMissing = true; }
+    var mm = /(^|[^\w])m\s*=\s*/.exec(body);
+    if (!mm) throw new Error("no m = \"...\" melody string found");
+    var p = mm.index + mm[0].length, pieces = [];
+    for (;;) {
+      var r = readLuaString(body, p);
+      if (!r) break;
+      pieces.push(r[0]);
+      p = r[1];
+      var sk = /^\s*\.\.\s*/.exec(body.substr(p));
+      if (!sk) break;
+      p += sk[0].length;
+    }
+    if (!pieces.length) throw new Error("melody m is not a string literal");
+    var full = pieces.join(""), bounds = [], off = 0;
+    for (var k = 0; k < pieces.length - 1; k++) { off += pieces[k].length; bounds.push(off); }
+    var toks = luaTokens(full);
+    song.items = toks.map(function (t) { return itemFromToken(t.w); });
+    bounds.forEach(function (b) {
+      var last = -1;
+      for (var j = 0; j < toks.length; j++) if (toks[j].s < b) last = j;
+      if (last >= 0) song.items[last].br = true;
+    });
+    return song;
+  }
+  function fmtNum(v, raw) {
+    if (raw != null && parseFloat(raw) === v) return raw;
+    return Number.isInteger(v) ? v.toFixed(1) : String(+v.toFixed(6));
+  }
+  function cleanHeader(s) { return String(s).replace(/[|\x00-\x1f\x7f]/g, "").trim(); }
+  function fileLines(items, wrap) {
+    var lines = [], cur = [], curLen = 0;
+    items.forEach(function (it, i) {
+      var w = itemToken(it);
+      if (wrap && cur.length && curLen + w.length + 1 > wrap) { lines.push(cur); cur = []; curLen = 0; }
+      cur.push(w); curLen += w.length + 1;
+      if (it.br && i < items.length - 1) { lines.push(cur); cur = []; curLen = 0; }
+    });
+    if (cur.length) lines.push(cur);
+    return lines;
+  }
+  function songM(song) { return song.items.map(itemToken).join(" "); }
+  function exportSong(song) {
+    var out = ["-- @" + cleanHeader(song.name) + "|" + cleanHeader(song.diff)];
+    (song.comments || []).forEach(function (c) { if (/^\s*--/.test(c)) out.push(c); else if (c.trim()) out.push("-- " + c); });
+    out.push("return { u = " + fmtNum(song.u, song.uStr) + ", a = " + fmtNum(song.a, song.aStr) + ", m =");
+    var lines = fileLines(song.items, 110);
+    if (!lines.length) out.push(' "" }');
+    lines.forEach(function (t, k) { out.push(' "' + t.join(" ") + (k < lines.length - 1 ? ' " ..' : '" }')); });
+    return out.join("\n") + "\n";
+  }
+
+  // ---------- the game, ported frame by frame from Game-Rhythm.lua ----------
+  // makeEngine(m, u, a, slot, opt) is the state right after startSong(); step(d, inp)
+  // is one run() call in the "play" state with d = getTime() ticks since last frame.
+  function makeEngine(m, u, a, slot, opt) {
+    opt = opt || {};
+    var toks = luaTokens(m).map(function (t, i) { var d = decodeToken(t.w); d.i = i; return d; });
+    var U = (u == null) ? 0.25 : u, AP = (a == null) ? 1.4 : a;
+    var songLen = 0, total = 0, i;
+    for (i = 0; i < 400; i++) {
+      if (i >= toks.length) break;
+      if (toks[i].f > 0 && toks[i].mk !== "x") total++;
+      songLen = songLen + toks[i].len * U;
+    }
+    var act = [], seed = slot * 1013 + 7, px = K.LCD_W / 2, py = 36, lastNT = -1;
+    var mPos = 0, mT = 0, cPos = 0, cT = 0, songT = -(AP + 1);
+    var score = 0, combo = 0, maxCombo = 0, c300 = 0, c100 = 0, c50 = 0, cMiss = 0;
+    var fbT = 0, fbKind = 0, fbX = 0, fbY = 0, cx = K.LCD_W / 2, cy = K.LCD_H / 2, held = false, dtF = 0, acc = 0;
+    var E = { state: "play", frame: 0, notes: [], frames: [], U: U, AP: AP, songLen: songLen, total: total, toks: toks, placeFails: 0 };
+    var allLen = 0;
+    toks.forEach(function (t) { allLen += t.len * U; });
+    E.allLen = allLen;
+
+    function rnd(n) { seed = (seed * 75 + 74) % 65537; return seed % n; }
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    var lastFail = false;
+    function place(ox, oy, d) {
+      var x, y, ok = false;
+      for (var t = 1; t <= 10; t++) {
+        var ang = rnd(16) * 0.3927;
+        x = clamp(Math.floor(ox + Math.cos(ang) * d + 0.5), K.R + 1, K.LCD_W - K.R - 2);
+        y = clamp(Math.floor(oy + Math.sin(ang) * d + 0.5), 9 + K.R, K.LCD_H - K.R - 3);
+        ok = (x - ox) * (x - ox) + (y - oy) * (y - oy) >= 196;
+        for (var j = 0; j < act.length; j++) {
+          var n = act[j];
+          if ((n.x - x) * (n.x - x) + (n.y - y) * (n.y - y) < 256) ok = false;
+          if (n.k === 3 && (n.x2 - x) * (n.x2 - x) + (n.y2 - y) * (n.y2 - y) < 256) ok = false;
+        }
+        if (ok) break;
+      }
+      lastFail = !ok;
+      return [x, y];
+    }
+    function addNote(t, d, mk, tokIdx) {
+      var k = 1;
+      if (mk === "h") k = 2; else if (mk === "s") k = 3;
+      var p = place(px, py, clamp((t - lastNT) * 60, 18, 40));
+      var fail1 = lastFail;
+      lastNT = t;
+      var n = { t: t, e: t, k: k, x: p[0], y: p[1], x2: p[0], y2: p[1], st: 0, g: 1, bad: 0,
+        id: E.notes.length, tok: tokIdx, spawnF: E.frame, spawnT: songT, pressF: null, endF: null, res: null, fail: fail1, fail2: false };
+      if (k > 1) n.e = t + d - Math.min(0.3, d * 0.25);
+      if (k === 3) {
+        var q = place(n.x, n.y, 26 + rnd(12));
+        n.x2 = q[0]; n.y2 = q[1]; n.fail2 = lastFail;
+        px = n.x2; py = n.y2;
+      } else { px = n.x; py = n.y; }
+      if (n.fail || n.fail2) E.placeFails++;
+      n.onScreen = act.length;
+      act.push(n);
+      E.notes.push(n);
+    }
+    function judge(g, x, y, n) {
+      fbKind = g; fbX = x; fbY = y; fbT = 0.4;
+      if (n) n.res = g;
+      if (g === 4) { cMiss++; combo = 0; return; }
+      var mult = 1 + Math.floor(combo / 10);
+      if (mult > 4) mult = 4;
+      combo++;
+      if (combo > maxCombo) maxCombo = combo;
+      if (g === 1) { c300++; score += 300 * mult; }
+      else if (g === 2) { c100++; score += 100 * mult; }
+      else { c50++; score += 50 * mult; }
+    }
+    function tap(pt) {
+      var hit = null;
+      for (var j = 0; j < act.length; j++) {
+        var n = act[j];
+        if (n.st === 0 && pt - n.t >= -K.W50 && pt - n.t <= K.W50) {
+          var dx = n.x - cx, dy = n.y - cy;
+          if (dx * dx + dy * dy <= K.HR * K.HR && (hit === null || n.t < hit.t)) hit = n;
+        }
+      }
+      if (hit === null) return;
+      var aa = Math.abs(pt - hit.t), g = 3;
+      if (aa <= K.W300) g = 1; else if (aa <= K.W100) g = 2;
+      if (hit.k === 1) { hit.st = 2; judge(g, hit.x, hit.y, hit); }
+      else { hit.st = 1; hit.g = g; hit.pressF = E.frame; }
+    }
+    function ballPos(n, T) {
+      var f = ((T == null ? songT : T) - n.t) / (n.e - n.t);
+      if (f < 0) f = 0; else if (f > 1) f = 1;
+      return [n.x + (n.x2 - n.x) * f, n.y + (n.y2 - n.y) * f];
+    }
+    function update(press, inp) {
+      if (inp.cx != null) { cx = inp.cx; cy = inp.cy; }
+      else { cx = K.LCD_W / 2 + (inp.ail || 0) * 62 / 1024; cy = 36 - (inp.ele || 0) * 27 / 1024; }
+      if (fbT > 0) fbT = fbT - dtF;
+      var k, tk, d;
+      for (k = 1; k <= 4; k++) {
+        if (mPos === null || mT > songT) break;
+        tk = toks[mPos];
+        if (!tk) { mPos = null; break; }
+        d = tk.len * U;
+        if (tk.f > 0 && songT - mT < 0.1 && opt.onTone) opt.onTone(Math.floor(tk.f), Math.floor(d * 1000) - 25, mPos);
+        mPos++; mT = mT + d;
+      }
+      for (k = 1; k <= 4; k++) {
+        if (cPos === null || cT - AP > songT) break;
+        tk = toks[cPos];
+        if (!tk) { cPos = null; break; }
+        if (tk.f > 0 && tk.mk !== "x") addNote(cT, tk.len * U, tk.mk, cPos);
+        cPos++; cT = cT + tk.len * U;
+      }
+      if (press) tap(songT - dtF / 2);
+      var j, n;
+      for (j = 0; j < act.length; j++) {
+        n = act[j];
+        if (n.st === 0) {
+          if (songT > n.t + K.W50) { n.st = 2; judge(4, n.x, n.y, n); }
+        } else if (n.st === 1) {
+          if (n.k === 3) {
+            var b = ballPos(n);
+            if (!held || (b[0] - cx) * (b[0] - cx) + (b[1] - cy) * (b[1] - cy) > K.FOLLOW * K.FOLLOW) n.bad = n.bad + dtF;
+            if (songT >= n.e) {
+              var g = n.g;
+              if (n.bad > 0.45) g = 4; else if (n.bad > 0.2 && g < 2) g = 2;
+              n.st = 2; judge(g, n.x2, n.y2, n);
+            }
+          } else if (songT >= n.e) { n.st = 2; judge(n.g, n.x, n.y, n); }
+          else if (!held) { n.st = 2; judge(4, n.x, n.y, n); }
+        }
+      }
+      var keep = [];
+      for (j = 0; j < act.length; j++) { if (act[j].st !== 2) keep.push(act[j]); else act[j].endF = E.frame; }
+      act = keep;
+      if (cPos === null && act.length === 0 && songT > songLen + 0.5) endSong();
+    }
+    function endSong() {
+      acc = 0;
+      if (total > 0) acc = Math.floor((300 * c300 + 100 * c100 + 50 * c50) * 1000 / (300 * total));
+      E.state = "done";
+    }
+    E.step = function (d, inp) {
+      if (E.state !== "play") return;
+      if (d > 25 || d < 0) d = 8;
+      dtF = d / 100;
+      if (dtF > 0.08) dtF = 0.08;
+      held = !!inp.held;
+      songT = songT + d / 100;
+      update(!!inp.press, inp);
+      if (opt.record) E.frames.push({ T: songT, score: score, combo: combo, cx: cx, cy: cy, held: held, fb: fbT > 0 ? [fbKind, fbX, fbY] : null, n: act.length });
+      E.frame++;
+    };
+    E.view = function () { return { songT: songT, act: act }; };
+    E.drawState = function () {
+      return { act: act, songT: songT, AP: AP, cx: cx, cy: cy, held: held, fb: fbT > 0 ? [fbKind, fbX, fbY] : null, score: score, combo: combo, songLen: songLen };
+    };
+    E.result = function () {
+      return { score: score, acc: acc, grade: grade(acc), maxCombo: maxCombo, c300: c300, c100: c100, c50: c50, cMiss: cMiss, total: total };
+    };
+    E.ballPos = ballPos;
+    return E;
+  }
+  function grade(acc) {
+    var k = 5;
+    if (acc >= 950) k = 1; else if (acc >= 900) k = 2; else if (acc >= 800) k = 3; else if (acc >= 700) k = 4;
+    return "SABCD".charAt(k - 1);
+  }
+  // SA/SD like readSw() during play: rest = 0, held when |v| > 400, press on the up->down edge
+  function makeSwitches() {
+    var pa = false, pd = false;
+    return function (inp) {
+      var ha = Math.abs(inp.sa || 0) > 400, hd = Math.abs(inp.sd || 0) > 400;
+      var press = (ha && !pa) || (hd && !pd) || !!inp.enter;
+      pa = ha; pd = hd;
+      return { ail: inp.ail, ele: inp.ele, cx: inp.cx, cy: inp.cy, held: ha || hd, press: press };
+    };
+  }
+  // Perfect-play bot. Sees only what dbg() exposes (songT, act), so the same code drives the
+  // Lua game in the tests. Returns raw stick/switch values {ail, ele, sa, sd}.
+  function AutoBot() { this.sa = 0; this.sd = 0; this.hold = null; this.ail = 0; this.ele = 0; }
+  AutoBot.prototype.next = function (v, d) {
+    var nextT = v.songT + d / 100, act = v.act, i, n, holding = false, slider = null, target = null, first = null;
+    for (i = 0; i < act.length; i++) {
+      n = act[i];
+      if (n.st === 1) { holding = true; if (n.k === 3 && slider === null) slider = n; }
+      else if (n.st === 0) {
+        if (first === null || n.t < first.t) first = n;
+        if (nextT >= n.t && (target === null || n.t < target.t)) target = n;
+      }
+    }
+    if (this.hold !== null && !holding) this.hold = null;
+    var pa = this.sa, pd = this.sd;
+    var sa = this.hold === "sa" ? 1024 : 0, sd = this.hold === "sd" ? 1024 : 0;
+    if (target !== null) {
+      var s = null;
+      if (pa === 0 && this.hold !== "sa") s = "sa"; else if (pd === 0 && this.hold !== "sd") s = "sd";
+      if (s === "sa") sa = 1024; else if (s === "sd") sd = 1024; else target = null;
+      if (target !== null && target.k > 1) this.hold = s;
+    }
+    var ax = null, ay = null;
+    if (target !== null) { ax = target.x; ay = target.y; }
+    else if (slider !== null) {
+      var f = (nextT - slider.t) / (slider.e - slider.t);
+      if (f < 0) f = 0; else if (f > 1) f = 1;
+      ax = slider.x + (slider.x2 - slider.x) * f; ay = slider.y + (slider.y2 - slider.y) * f;
+    } else if (first !== null) { ax = first.x; ay = first.y; }
+    if (ax !== null) { this.ail = (ax - 64) * 1024 / 62; this.ele = (36 - ay) * 1024 / 27; }
+    this.sa = sa; this.sd = sd;
+    return { ail: this.ail, ele: this.ele, sa: sa, sd: sd };
+  };
+  function simulate(m, u, a, slot, mode, tick, opt) {
+    opt = opt || {};
+    var E = makeEngine(m, u, a, slot, { record: opt.record !== false });
+    var bot = mode === "auto" ? new AutoBot() : null, sw = makeSwitches();
+    var lim = Math.ceil((E.allLen + E.AP + 4) * 100 / tick) + 200;
+    if (lim > 400000) lim = 400000;
+    while (E.state === "play" && E.frame < lim) {
+      var inp = bot ? bot.next(E.view(), tick) : { ail: 0, ele: 0, sa: 0, sd: 0 };
+      E.step(tick, sw(inp));
+    }
+    return E;
+  }
+  // state of a recorded simulation at frame F, in the shape drawGame() wants
+  function simState(E, F) {
+    var fr = E.frames[F], act = [];
+    if (!fr) return null;
+    for (var i = 0; i < E.notes.length; i++) {
+      var n = E.notes[i];
+      if (n.spawnF <= F && (n.endF === null || n.endF > F)) {
+        act.push({ t: n.t, e: n.e, k: n.k, x: n.x, y: n.y, x2: n.x2, y2: n.y2, st: (n.pressF !== null && n.pressF <= F) ? 1 : 0, id: n.id, tok: n.tok });
+      }
+    }
+    return { act: act, songT: fr.T, AP: E.AP, cx: fr.cx, cy: fr.cy, held: fr.held, fb: fr.fb, score: fr.score, combo: fr.combo, songLen: E.songLen };
+  }
+  function frameAt(E, T) { // last frame with songT <= T
+    var lo = 0, hi = E.frames.length - 1, r = -1;
+    while (lo <= hi) { var mid = (lo + hi) >> 1; if (E.frames[mid].T <= T) { r = mid; lo = mid + 1; } else hi = mid - 1; }
+    return r;
+  }
+
+  // ---------- 128x64 drawing, same primitives as draw() ----------
+  function Screen() { this.px = new Uint8Array(128 * 64); this.texts = []; }
+  Screen.prototype.clear = function () { this.px.fill(0); this.texts = []; };
+  Screen.prototype.plot = function (x, y) { x = Math.floor(x); y = Math.floor(y); if (x >= 0 && x < 128 && y >= 0 && y < 64) this.px[y * 128 + x] = 1; };
+  Screen.prototype.circle = function (ox, oy, r) {
+    ox = Math.floor(ox + 0.5); oy = Math.floor(oy + 0.5);
+    var x = r, y = 0, d = 1 - r;
+    for (var i = 1; i <= 40; i++) {
+      if (x < y) break;
+      this.plot(ox + x, oy + y); this.plot(ox - x, oy + y); this.plot(ox + x, oy - y); this.plot(ox - x, oy - y);
+      this.plot(ox + y, oy + x); this.plot(ox - y, oy + x); this.plot(ox + y, oy - x); this.plot(ox - y, oy - x);
+      y++;
+      if (d < 0) d = d + 2 * y + 1; else { x--; d = d + 2 * (y - x) + 1; }
+    }
+  };
+  Screen.prototype.line = function (x0, y0, x1, y1, dotted) {
+    x0 = Math.floor(x0); y0 = Math.floor(y0); x1 = Math.floor(x1); y1 = Math.floor(y1);
+    var dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1, err = dx + dy, k = 0;
+    for (var i = 0; i < 400; i++) {
+      if (!dotted || (k & 1) === 0) this.plot(x0, y0);
+      k++;
+      if (x0 === x1 && y0 === y1) break;
+      var e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  };
+  Screen.prototype.fill = function (x, y, w, h) { for (var j = 0; j < h; j++) for (var i = 0; i < w; i++) this.plot(x + i, y + j); };
+  Screen.prototype.text = function (x, y, s, right, big) { this.texts.push({ x: x, y: y, s: s, right: !!right, big: !!big }); };
+  function drawGame(scr, s) {
+    var R = K.R, RING = K.RING;
+    scr.clear();
+    for (var i = s.act.length - 1; i >= 0; i--) {
+      var n = s.act[i];
+      if (n.k === 3) { scr.line(n.x, n.y, n.x2, n.y2, true); scr.circle(n.x2, n.y2, 3); }
+      if (n.st === 0) {
+        scr.circle(n.x, n.y, R);
+        var r = Math.floor(R + (RING - R) * (n.t - s.songT) / s.AP + 0.5);
+        if (r < R + 1) r = R + 1;
+        scr.circle(n.x, n.y, r);
+        if (n.k === 2) scr.fill(n.x - 1, n.y - 1, 3, 3); else scr.plot(n.x, n.y);
+      } else if (n.k === 2) {
+        scr.circle(n.x, n.y, R);
+        var r2 = Math.floor((R - 1) * (n.e - s.songT) / (n.e - n.t) + 0.5);
+        if (r2 >= 1) scr.circle(n.x, n.y, r2);
+      } else {
+        var f = (s.songT - n.t) / (n.e - n.t);
+        if (f < 0) f = 0; else if (f > 1) f = 1;
+        var bx = n.x + (n.x2 - n.x) * f, by = n.y + (n.y2 - n.y) * f;
+        scr.circle(bx, by, R - 2);
+        if (s.held) scr.circle(bx, by, K.FOLLOW);
+      }
+    }
+    var x = Math.floor(s.cx + 0.5), y = Math.floor(s.cy + 0.5);
+    scr.line(x - 3, y, x - 1, y); scr.line(x + 1, y, x + 3, y); scr.line(x, y - 3, x, y - 1); scr.line(x, y + 1, x, y + 3);
+    if (s.fb) {
+      var t = ["", "300", "100", "50", "MISS"][s.fb[0]];
+      var fx = s.fb[1] - 8; if (fx < 0) fx = 0; else if (fx > 128 - 24) fx = 128 - 24;
+      var fy = s.fb[2] - R - 8; if (fy < 9) fy = s.fb[2] + R + 2;
+      scr.text(Math.floor(fx), Math.floor(fy), t);
+    }
+    scr.text(0, 0, "" + s.score);
+    scr.text(127, 0, s.combo + "x", true);
+    if (s.songT < 0) scr.text(28, 0, "Aim R-stick, hit SA/SD");
+    var w = 0;
+    if (s.songLen > 0 && s.songT > 0) w = Math.floor(s.songT * 128 / s.songLen);
+    if (w > 128) w = 128;
+    if (w > 0) scr.line(0, 63, w - 1, 63);
+  }
+
+  // ---------- validator ----------
+  function validate(song, slot, E) {
+    var out = [], U = song.u, i;
+    function add(sev, msg, item) { out.push({ sev: sev, msg: msg, item: item }); }
+    var nameLen = cleanHeader(song.name).length, diffLen = cleanHeader(song.diff).length;
+    if (!nameLen) add("warn", "Empty name: the picker will show \"Song " + slot + "\".");
+    if (nameLen + diffLen + 1 > 21) add("warn", "Name + difficulty is " + (nameLen + diffLen + 1) + " characters; the picker line fits about 21 (they will overlap).");
+    var hdr = "-- @" + cleanHeader(song.name) + "|" + cleanHeader(song.diff);
+    if (hdr.length > 80) add("err", "Header line is " + hdr.length + " bytes; the game reads only the first 80.");
+    if (cleanHeader(song.name) !== String(song.name).trim() || cleanHeader(song.diff) !== String(song.diff).trim()) add("info", "'|' and control characters are removed from name/difficulty on export.");
+    if (!(slot >= 1 && slot <= 99)) add("err", "File number must be 1-99 (the game looks for s1.lua … s99.lua).");
+    if (!(U > 0)) add("err", "u must be > 0.");
+    if (!(song.a > 0)) add("err", "a (approach time) must be > 0.");
+    else if (song.a < 0.6) add("warn", "Approach time " + song.a + " s is very short (shipped songs use 1.0-1.6 s).");
+    else if (song.a > 3) add("info", "Approach time " + song.a + " s is long; many circles will be on screen at once.");
+    if (song.items.length > 400) add("warn", song.items.length + " tokens: the game only counts the first 400 for song length and note total (accuracy can go over 100%).");
+    var chart = [], t = 0, low = 0, high = 0, shortTok = 0, firstShort = -1;
+    for (i = 0; i < song.items.length; i++) {
+      var it = song.items[i], d = decodeToken(itemToken(it)), dur = d.len * U;
+      if (it.t === "raw") add("err", "Token \"" + it.text + "\" is not valid; the game treats it as " + (d.rest ? "a rest of " + d.len : "a silent 1-unit rest") + ".", i);
+      else if (it.t === "n" && it.mk && "hsx".indexOf(it.mk) < 0) add("info", "Mark '" + it.mk + "' is unknown; the game treats it as a tap.", i);
+      if (d.len === 0) add("err", "Length 0: no time passes, the tone is cut and the note lands on the next one.", i);
+      else if (dur < 0.08) { shortTok++; if (firstShort < 0) firstShort = i; }
+      if (d.f > 0) {
+        if (Math.floor(dur * 1000) - 25 <= 0) add("err", "Tone too short to play (" + Math.round(dur * 1000) + " ms - 25 ms gap).", i);
+        if (d.f < 150) { low++; if (low === 1) add("warn", midiName(d.midi) + " = " + Math.floor(d.f) + " Hz: below ~150 Hz the radio speaker is weak/buzzy.", i); }
+        if (d.f > 4200) { high++; if (high === 1) add("warn", midiName(d.midi) + " = " + Math.floor(d.f) + " Hz: above ~4.2 kHz the beeper gets shrill/thin.", i); }
+        if (d.mk !== "x") chart.push({ i: i, t: t, d: dur, mk: d.mk });
+      }
+      t += dur;
+    }
+    if (low > 1) add("warn", low + " notes below 150 Hz in total.");
+    if (high > 1) add("warn", high + " notes above 4.2 kHz in total.");
+    if (shortTok) add("warn", shortTok + " token(s) shorter than 80 ms (about one radio frame): the game handles at most 4 tokens per frame and skips tones that start more than 0.1 s late.", firstShort);
+    if (!chart.length) add("err", "No charted notes (everything is a rest or music-only): nothing to hit, accuracy is 0.");
+    var tight = 0, vtight = 0, firstT = -1, firstV = -1;
+    for (i = 1; i < chart.length; i++) {
+      var gap = chart[i].t - chart[i - 1].t;
+      if (gap < 0.1) { vtight++; if (firstV < 0) firstV = chart[i].i; }
+      else if (gap < 2 * K.W300) { tight++; if (firstT < 0) firstT = chart[i].i; }
+    }
+    if (vtight) add("err", vtight + " charted note(s) less than 0.10 s after the previous one: inside one 300-window, and only 1-2 radio frames apart.", firstV);
+    if (tight) add("warn", tight + " charted note(s) 0.10-0.20 s after the previous one: their 300-windows overlap, a press can be judged against the neighbour. Fine for HARD/EXPERT, too dense for EASY.", firstT);
+    chart.forEach(function (c) {
+      if (c.mk === "s") { var len = c.d - Math.min(0.3, c.d * 0.25); if (len < 0.35) add("warn", "Slider lasts only " + len.toFixed(2) + " s; the ball crosses 26-37 px, hard to follow (make it 3+ units or a hold).", c.i); }
+      if (c.mk === "h") { var hl = c.d - Math.min(0.3, c.d * 0.25); if (hl < 0.15) add("info", "Hold of " + hl.toFixed(2) + " s is barely longer than a tap.", c.i); }
+    });
+    if (E) {
+      var fails = E.notes.filter(function (n) { return n.fail || n.fail2; });
+      if (fails.length) add("warn", fails.length + " circle(s) could not be kept 16 px clear of the circles already on screen (placement gave up after 10 tries) and may overlap. Usually: too many notes within the approach time.", fails[0].tok);
+      var maxOn = 0, at = -1;
+      E.notes.forEach(function (n) { if (n.onScreen + 1 > maxOn) { maxOn = n.onScreen + 1; at = n.tok; } });
+      if (maxOn > 7) add("info", "Up to " + maxOn + " circles on screen at once (128x64 is small).", at);
+    }
+    var size = exportSong(song).length;
+    if (size > 4096) add("err", "File is " + size + " bytes; keep songs small (shipped ones are 0.4-0.8 KB) - the whole melody string stays in the radio's small Lua heap while playing.");
+    else if (size > 1600) add("warn", "File is " + size + " bytes, about twice the largest shipped song. Test it on the radio (memory).");
+    if (t > 300) add("info", "Song is " + Math.round(t) + " s long.");
+    return out;
+  }
+
+  // ---------- helpers ----------
+  function parseNoteInput(txt, defLen) {
+    var parts = String(txt).split(/[\s,;]+/).filter(Boolean), out = [], last = null, needLen = false;
+    var SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    function mark(s, it) {
+      if (!s) return;
+      var m = { t: "", tap: "", h: "h", hold: "h", s: "s", slider: "s", x: "x", music: "x" }[s.toLowerCase()];
+      if (m === undefined) throw new Error("unknown mark '" + s + "' (use h, s, x)");
+      if (it.t === "n") it.mk = m;
+    }
+    parts.forEach(function (p) {
+      var m;
+      if ((m = /^([0-9]+)([a-zA-Z]*)$/.exec(p)) && last && needLen) {
+        var l = +m[1];
+        if (l < 1 || l > 9) throw new Error("length " + l + " in '" + p + "': lengths are 1-9 units");
+        last.l = l; mark(m[2], last); needLen = false; return;
+      }
+      if ((m = /^(?:R|r|rest|-)([0-9]?)$/.exec(p))) {
+        last = { t: "r", l: m[1] ? +m[1] : defLen, br: false }; needLen = !m[1]; out.push(last); return;
+      }
+      if ((m = /^([A-Ga-g])([#sb]?)(-?[0-9])([0-9]?)([a-z]*)$/.exec(p)) && !(m[2] === "s" && !m[3])) {
+        var L = m[1].toUpperCase(), acc = m[2] === "#" ? 1 : (m[2] === "b" ? -1 : 0);
+        var midi = 12 * (+m[3] + 1) + SEMI[L] + acc;
+        if (midi < 12 || midi > 131) throw new Error("'" + p + "' is outside octaves 0-9");
+        last = { t: "n", p: "C", o: 0, l: m[4] ? +m[4] : defLen, mk: "", br: false };
+        setMidi(last, midi);
+        if (m[4] && last.l < 1) throw new Error("length 0 in '" + p + "'");
+        mark(m[5], last); needLen = !m[4]; out.push(last); return;
+      }
+      throw new Error("can't read '" + p + "'");
+    });
+    return out;
+  }
+  function transpose(items, semis) {
+    for (var i = 0; i < items.length; i++) if (items[i].t === "n") {
+      var m = itemMidi(items[i]) + semis;
+      if (m < 12 || m > 131) throw new Error("transposing would leave octaves 0-9");
+    }
+    items.forEach(function (it) { if (it.t === "n") setMidi(it, itemMidi(it) + semis); });
+  }
+  // snap note starts to multiples of g units; keeps order; lengths > 9 become note + rests
+  function quantize(items, g) {
+    var s = 0, starts = [];
+    items.forEach(function (it) { starts.push(s); s += decodeToken(itemToken(it)).len; });
+    var end = Math.max(g, Math.round(s / g) * g), q = [], prev = -1;
+    starts.forEach(function (st) { var v = Math.round(st / g) * g; if (v <= prev) v = prev + g; q.push(v); prev = v; });
+    if (end <= prev) end = prev + g;
+    var out = [];
+    items.forEach(function (it, i) {
+      var len = (i + 1 < q.length ? q[i + 1] : end) - q[i];
+      var c = JSON.parse(JSON.stringify(it));
+      if (c.t === "raw") c = { t: "r", l: 1, br: c.br };
+      var first = Math.min(9, len);
+      c.l = first; out.push(c);
+      len -= first;
+      while (len > 0) { var r = Math.min(9, len); out.push({ t: "r", l: r, br: false }); len -= r; }
+    });
+    return out;
+  }
+
+  return { K: K, NAMES: NAMES, DEF_COMMENTS: DEF_COMMENTS, luaTokens: luaTokens, decodeToken: decodeToken, midiName: midiName,
+    itemFromToken: itemFromToken, itemToken: itemToken, itemMidi: itemMidi, setMidi: setMidi, newSong: newSong,
+    parseSong: parseSong, exportSong: exportSong, songM: songM, cleanHeader: cleanHeader, fileLines: fileLines,
+    makeEngine: makeEngine, makeSwitches: makeSwitches, AutoBot: AutoBot, simulate: simulate, simState: simState, frameAt: frameAt,
+    grade: grade, Screen: Screen, drawGame: drawGame, validate: validate, parseNoteInput: parseNoteInput, transpose: transpose, quantize: quantize };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = TXR;
+</script>
+
+<script id="builtin">
+var BUILTIN = /*BUILTIN*/[{"n":1,"text":"-- @Twinkle Twinkle|EASY\n-- Twinkle Twinkle Little Star (traditional). EASY\n-- token: note+octave+length[mark]; length in units of u seconds\n-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest\nreturn { u = 0.3, a = 1.6, m =\n \"C52 C52 G52 G52 A52 A52 G54h F52 F52 E52 E52 D52 D52 C54h \" ..\n \"G52 G52 F52 F52 E52 E52 D54h G52 G52 F52 F52 E52 E52 D54h \" ..\n \"C52 C52 G52 G52 A52 A52 G54h F52 F52 E52 E52 D52 D52 C54h\" }\n"},{"n":2,"text":"-- @Ode to Joy|EASY\n-- Ode to Joy (Beethoven, 9th symphony). EASY\n-- token: note+octave+length[mark]; length in units of u seconds\n-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest\nreturn { u = 0.25, a = 1.5, m =\n \"E52 E52 F52 G52 G52 F52 E52 D52 C52 C52 D52 E52 E53 D51x D54h \" ..\n \"E52 E52 F52 G52 G52 F52 E52 D52 C52 C52 D52 E52 D53 C51x C54h \" ..\n \"D52 D52 E52 C52 D52 E51x F51x E52 C52 D52 E51x F51x E52 D52 C52 D52 G44s \" ..\n \"E52 E52 F52 G52 G52 F52 E52 D52 C52 C52 D52 E52 D53 C51x C54h\" }\n"},{"n":3,"text":"-- @Jingle Bells|NORMAL\n-- Jingle Bells (J. Pierpont, 1857), chorus. NORMAL\n-- token: note+octave+length[mark]; length in units of u seconds\n-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest\nreturn { u = 0.24, a = 1.3, m =\n \"E52 E52 E54h E52 E52 E54h E52 G52 C53 D51 E58s \" ..\n \"F52 F52 F53 F51x F52 E52 E52 E51 E51x E52 D52 D52 E52 D54h G54h \" ..\n \"E52 E52 E54h E52 E52 E54h E52 G52 C53 D51 E58s \" ..\n \"F52 F52 F53 F51x F52 E52 E52 E51 E51x G52 G52 F52 D52 C58h\" }\n"},{"n":4,"text":"-- @Korobeiniki|HARD\n-- Korobeiniki (Russian folk song, the \"Tetris\" theme). HARD\n-- token: note+octave+length[mark]; length in units of u seconds\n-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest\nreturn { u = 0.19, a = 1.1, m =\n \"E52 B41 C51 D52 C51 B41 A42 A41 C51 E52 D51 C51 B43s C51 D52 E52 C52 A42 A44h \" ..\n \"D53s F51 A52 G51 F51 E53s C51 E52 D51 C51 B42 B41 C51 D52 E52 C52 A42 A42 R2 \" ..\n \"E52 B41 C51 D52 C51 B41 A42 A41 C51 E52 D51 C51 B43s C51 D52 E52 C52 A42 A44h \" ..\n \"D53s F51 A52 G51 F51 E53s C51 E52 D51 C51 B42 B41 C51 D52 E52 C52 A42 A44h\" }\n"},{"n":5,"text":"-- @Fur Elise|EXPERT\n-- Fur Elise (Beethoven), opening theme three times. EXPERT\n-- token: note+octave+length[mark]; length in units of u seconds\n-- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest\nreturn { u = 0.16, a = 1.0, m =\n \"E51 D#51 E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 G#41 B41 C52 R1 E41 E51 D#51 \" ..\n \"E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 C51 B41 A44h R2 \" ..\n \"E51 D#51 E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 G#41 B41 C52 R1 E41 E51 D#51 \" ..\n \"E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 C51 B41 A44h R2 \" ..\n \"E51 D#51 E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 G#41 B41 C52 R1 E41 E51 D#51 \" ..\n \"E51 D#51 E51 B41 D51 C51 A42 R1 C41 E41 A41 B42 R1 E41 C51 B41 A46h\" }\n"}];
+</script>
+
+<script id="ui">
+(function () {
+  "use strict";
+  if (typeof document === "undefined") return;
+  var $ = function (id) { return document.getElementById(id); };
+  var T = TXR, K = T.K;
+  var song, slot = 6, sel = null, anchor = null, undoS = [], redoS = [], sim = null, playhead = 0;
+  var ppu = 18, ROW = 10, RULER = 18, LM = 44, REST_LANE = 16;
+  var LS = "tx12-rhythm-editor-v1";
+
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.h); toast.h = setTimeout(function () { t.style.display = "none"; }, 2600); }
+  function snap() { return JSON.stringify({ song: song, slot: slot }); }
+  function restore(s) { var o = JSON.parse(s); song = o.song; slot = o.slot; }
+  function pushUndo(s) { undoS.push(s || snap()); if (undoS.length > 200) undoS.shift(); redoS = []; }
+  function commit(fn) { var before = snap(); try { fn(); } catch (e) { restore(before); toast(e.message); return false; } if (snap() !== before) pushUndo(before); refresh(); return true; }
+  function selRange() { if (sel === null) return null; return [Math.min(sel, anchor), Math.max(sel, anchor)]; }
+  function selItems() { var r = selRange(); return r ? song.items.slice(r[0], r[1] + 1) : []; }
+  function setSel(i, extend) {
+    if (i === null || i < 0 || i >= song.items.length) { sel = anchor = null; return; }
+    if (extend && anchor !== null) sel = i; else sel = anchor = i;
+  }
+
+  // ---------- timeline ----------
+  var tl = [];
+  function timeline() {
+    tl = []; var t = 0, u = 0;
+    song.items.forEach(function (it, i) {
+      var d = T.decodeToken(T.itemToken(it));
+      tl.push({ t: t, u: u, len: d.len, dur: d.len * song.u, d: d });
+      t = t + d.len * song.u; u += d.len;
+    });
+    tl.totalU = u; tl.totalT = t;
+  }
+
+  // ---------- simulation (debounced) ----------
+  var simTimer = null;
+  function runSim() {
+    try { sim = T.simulate(T.songM(song), song.u, song.a, slot, $("sModel").value, +$("sTick").value); }
+    catch (e) { sim = null; }
+    renderVal(); drawField(); drawRoll(); showSel();
+  }
+  function scheduleSim() { clearTimeout(simTimer); simTimer = setTimeout(runSim, 120); }
+
+  // ---------- refresh ----------
+  function refresh(light) {
+    if (sel !== null && sel >= song.items.length) setSel(song.items.length ? song.items.length - 1 : null);
+    if (anchor !== null && anchor >= song.items.length) anchor = sel;
+    timeline();
+    $("iName").value = song.name; $("iDiff").value = song.diff; $("iSlot").value = slot; $("slotLbl").textContent = slot;
+    $("iU").value = song.u; $("iA").value = song.a;
+    var upb = +$("iUpb").value || 2; $("iBpm").value = song.u > 0 ? Math.round(60 / (song.u * upb) * 10) / 10 : "";
+    if (document.activeElement !== $("tComments")) $("tComments").value = (song.comments || []).join("\n");
+    var nNotes = 0; tl.forEach(function (x) { if (x.d.f > 0 && x.d.mk !== "x") nNotes++; });
+    $("stats").textContent = song.items.length + " tokens · " + nNotes + " circles · " + tl.totalT.toFixed(1) + " s";
+    if (document.activeElement !== $("tMel")) $("tMel").value = T.fileLines(song.items, 0).map(function (l) { return l.join(" "); }).join("\n");
+    var txt = T.exportSong(song);
+    $("tOut").value = txt;
+    $("expInfo").textContent = "s" + slot + ".lua · " + txt.length + " bytes";
+    $("exportNote").innerHTML = "Copy to the SD card as <b class=mono>/SCRIPTS/GAMES/RHYTHM/s" + slot + ".lua</b> and delete <span class=mono>s" + slot + ".luac</span> if it exists. " +
+      "New song? Use the <b>next free number</b> (s6.lua, s7.lua, …): the game counts the files until one is missing (max 99) and reads the name from the first line, so <b>no game change is needed</b>. " +
+      "The file number also seeds the circle layout - the preview uses s" + slot + ".";
+    $("bUndo").disabled = !undoS.length; $("bRedo").disabled = !redoS.length;
+    drawRoll(); showInsp(); showSel();
+    try { localStorage.setItem(LS, snap()); } catch (e) { /* storage unavailable */ }
+    scheduleSim();
+  }
+
+  // ---------- piano roll ----------
+  var roll = $("roll"), rctx = roll.getContext("2d"), pitchLo = 60, pitchHi = 72;
+  function pitchRange() {
+    var lo = 200, hi = -1;
+    song.items.forEach(function (it) { var m = T.itemMidi(it); if (m !== null) { lo = Math.min(lo, m); hi = Math.max(hi, m); } });
+    if (hi < 0) { lo = 60; hi = 72; }
+    lo -= 2; hi += 2;
+    while (hi - lo < 18) { hi++; if (hi - lo < 18) lo--; }
+    pitchLo = lo; pitchHi = hi;
+  }
+  function midiY(m) { return RULER + (pitchHi - m) * ROW; }
+  function yMidi(y) { return Math.max(12, Math.min(131, pitchHi - Math.floor((y - RULER) / ROW))); }
+  function uX(u) { return LM + u * ppu; }
+  function xU(x) { return (x - LM) / ppu; }
+  function laneY() { return RULER + (pitchHi - pitchLo + 1) * ROW + 2; }
+  function colorOf(it) {
+    if (it.t === "r") return getCss("--rest");
+    if (it.t === "raw") return getCss("--err");
+    if (it.mk === "h") return getCss("--hold");
+    if (it.mk === "s") return getCss("--slider");
+    if (it.mk === "x") return getCss("--mus");
+    return getCss("--tap");
+  }
+  var cssCache = {};
+  function getCss(v) { return cssCache[v] || (cssCache[v] = getComputedStyle(document.documentElement).getPropertyValue(v).trim()); }
+  function drawRoll() {
+    if (!song) return;
+    pitchRange();
+    var H = laneY() + REST_LANE + 4, W = Math.max($("rollWrap").clientWidth - 2, uX(tl.totalU + 16));
+    if (roll.width !== Math.ceil(W) || roll.height !== H) { roll.width = Math.ceil(W); roll.height = H; }
+    var c = rctx, sl = $("rollWrap").scrollLeft, upb = +$("iUpb").value || 2, r = selRange();
+    c.fillStyle = "#11141a"; c.fillRect(0, 0, roll.width, H);
+    for (var m = pitchHi; m >= pitchLo; m--) {
+      var black = [1, 3, 6, 8, 10].indexOf(m % 12) >= 0;
+      c.fillStyle = black ? "#161a21" : "#1b2029"; c.fillRect(LM, midiY(m), roll.width, ROW);
+    }
+    var maxU = Math.ceil(xU(roll.width));
+    for (var u = 0; u <= maxU; u++) {
+      c.fillStyle = u % (upb * 4) === 0 ? "#3a4352" : (u % upb === 0 ? "#2a313d" : "#20252e");
+      c.fillRect(uX(u), RULER, 1, H - RULER);
+    }
+    c.fillStyle = "#232934"; c.fillRect(0, 0, roll.width, RULER);
+    c.font = "10px system-ui"; c.fillStyle = "#97a1b0";
+    for (u = 0; u <= maxU; u += upb) {
+      c.fillRect(uX(u), RULER - 5, 1, 5);
+      if ((u / upb) % 4 === 0) c.fillText((u * song.u).toFixed(1) + "s", uX(u) + 2, 11);
+    }
+    c.fillStyle = "#1a1e25"; c.fillRect(LM, laneY(), roll.width, REST_LANE);
+    if (r && $("cLoop").checked) { c.fillStyle = "rgba(95,179,255,.10)"; c.fillRect(uX(tl[r[0]].u), RULER, (tl[r[1]].u + tl[r[1]].len - tl[r[0]].u) * ppu, H - RULER); }
+    // circle hit markers from the simulation (ticks on the ruler)
+    song.items.forEach(function (it, i) {
+      var x = tl[i]; if (!x) return;
+      var x0 = uX(x.u), w = Math.max(2, x.len * ppu - 1), y, h = ROW - 1;
+      if (it.t === "n") y = midiY(T.itemMidi(it)) + 1; else { y = laneY() + 2; h = REST_LANE - 4; }
+      c.fillStyle = colorOf(it);
+      c.globalAlpha = it.t === "n" && it.mk === "x" ? 0.75 : 1;
+      c.fillRect(x0 + 1, y, w - 1, h);
+      c.globalAlpha = 1;
+      if (it.t === "n" && it.mk !== "x") { c.fillStyle = "#0008"; c.beginPath(); c.arc(x0 + 5, y + h / 2, 2.4, 0, 7); c.fill(); }
+      if (it.t === "n" && (it.mk === "h" || it.mk === "s")) { // where the hold/slider ends
+        var eT = x.dur - Math.min(0.3, x.dur * 0.25); c.fillStyle = "#000a"; c.fillRect(x0 + eT / song.u * ppu, y, 2, h);
+      }
+      if (r && i >= r[0] && i <= r[1]) { c.strokeStyle = "#fff"; c.lineWidth = 1.5; c.strokeRect(x0 + 1, y - 0.5, w - 1, h + 1); }
+      if (it.br && i < song.items.length - 1) { c.fillStyle = "#5fb3ff55"; c.fillRect(x0 + x.len * ppu - 1, RULER, 1, H - RULER); }
+    });
+    c.fillStyle = "#ff6b6b"; c.fillRect(uX(playhead / song.u), 0, 2, H);
+    // pinned pitch labels
+    c.fillStyle = "#232934"; c.fillRect(sl, RULER, LM - 2, H - RULER);
+    c.font = "9px system-ui";
+    for (m = pitchHi; m >= pitchLo; m--) {
+      c.fillStyle = m % 12 === 0 ? "#e3e7ee" : "#7f8a99";
+      if (m % 12 === 0 || [2, 4, 5, 7, 9, 11].indexOf(m % 12) >= 0 || ROW > 9) c.fillText(T.midiName(m), sl + 3, midiY(m) + ROW - 2);
+    }
+    c.fillStyle = "#97a1b0"; c.fillText("rest", sl + 3, laneY() + 11);
+  }
+  function hitItem(x, y) {
+    var u = xU(x), lane = y >= laneY() && y < laneY() + REST_LANE;
+    for (var i = 0; i < song.items.length; i++) {
+      var it = song.items[i], s = tl[i];
+      if (u < s.u || u >= s.u + Math.max(s.len, 0.3)) continue;
+      if (it.t === "n") { var yy = midiY(T.itemMidi(it)); if (y >= yy && y < yy + ROW) return { i: i, edge: x > uX(s.u + s.len) - 5 }; }
+      else if (lane) return { i: i, edge: x > uX(s.u + s.len) - 5 };
+    }
+    return null;
+  }
+  function itemAtU(u) { for (var i = 0; i < tl.length; i++) if (u >= tl[i].u && u < tl[i].u + tl[i].len) return i; return -1; }
+  var drag = null;
+  function mpos(e) { var b = roll.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; }
+  roll.addEventListener("mousedown", function (e) {
+    var p = mpos(e);
+    if (p.y < RULER) { playhead = Math.max(0, xU(p.x)) * song.u; drawRoll(); drawField(); return; }
+    var h = hitItem(p.x, p.y);
+    if (!h) { return; }
+    setSel(h.i, e.shiftKey);
+    playhead = tl[h.i].t; drawField();
+    if (!e.shiftKey) drag = { i: h.i, mode: h.edge ? "len" : "move", x0: p.x, y0: p.y, before: snap(), changed: false };
+    refreshLight();
+  });
+  window.addEventListener("mousemove", function (e) {
+    if (!drag) { var p0 = mpos(e); var hh = (p0.x >= 0 && p0.y >= 0 && p0.x < roll.width && p0.y < roll.height) ? hitItem(p0.x, p0.y) : null; roll.style.cursor = hh ? (hh.edge ? "ew-resize" : "grab") : (p0.y < RULER ? "pointer" : "default"); return; }
+    var p = mpos(e), it = song.items[drag.i];
+    if (drag.mode === "len") {
+      if (it.t === "raw") return;
+      var nl = Math.max(1, Math.min(9, Math.round(xU(p.x) - tl[drag.i].u)));
+      if (nl !== it.l) { it.l = nl; drag.changed = true; timeline(); drawRoll(); }
+    } else {
+      if (it.t === "n" && Math.abs(p.y - drag.y0) > 3) {
+        var m = yMidi(p.y);
+        if (m !== T.itemMidi(it)) { T.setMidi(it, m); drag.changed = true; drawRoll(); preview(it); }
+      }
+      if (Math.abs(p.x - drag.x0) > ppu / 2) {
+        var j = itemAtU(xU(p.x));
+        if (j < 0 && xU(p.x) >= tl.totalU) j = song.items.length - 1;
+        if (j >= 0 && j !== drag.i) {
+          var moved = song.items.splice(drag.i, 1)[0];
+          song.items.splice(j, 0, moved);
+          drag.i = j; setSel(j); drag.changed = true; timeline(); drawRoll();
+        }
+      }
+    }
+  });
+  window.addEventListener("mouseup", function () {
+    if (!drag) return;
+    if (drag.changed) { pushUndo(drag.before); refresh(); }
+    drag = null;
+  });
+  roll.addEventListener("dblclick", function (e) {
+    var p = mpos(e);
+    if (p.y < RULER || hitItem(p.x, p.y)) return;
+    var inLane = p.y >= laneY();
+    var u = xU(p.x), j = itemAtU(u), at;
+    if (j < 0) at = song.items.length; else at = (u - tl[j].u < tl[j].len / 2) ? j : j + 1;
+    commit(function () {
+      var it = inLane ? { t: "r", l: +$("sNewLen").value, br: false } : { t: "n", p: "C", o: 4, l: +$("sNewLen").value, mk: "", br: false };
+      if (!inLane) T.setMidi(it, yMidi(p.y));
+      song.items.splice(at, 0, it); setSel(at);
+    });
+    if (!inLane) preview(song.items[sel]);
+  });
+  $("rollWrap").addEventListener("scroll", drawRoll);
+  $("rZoom").addEventListener("input", function () { ppu = +this.value; drawRoll(); });
+
+  // ---------- inspector ----------
+  function opt(v, txt, cur) { return "<option value='" + v + "'" + (String(v) === String(cur) ? " selected" : "") + ">" + txt + "</option>"; }
+  function showInsp() {
+    var el = $("insp"), r = selRange();
+    if (!r) { el.innerHTML = "<span class=small>Nothing selected. Click a note, or double-click the grid to add one.</span>"; return; }
+    if (r[0] !== r[1]) {
+      el.innerHTML = "<b>" + (r[1] - r[0] + 1) + " tokens selected</b> &nbsp; set length <select id=mLen>" + opt("", "-", "") + [1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (v) { return opt(v, v, ""); }).join("") +
+        "</select> type <select id=mType>" + opt("", "-", "") + opt("tap", "tap", "-") + opt("h", "hold", "-") + opt("s", "slider", "-") + opt("x", "music only", "-") + "</select>";
+      $("mLen").onchange = function () { var v = +this.value; if (v) commit(function () { selItems().forEach(function (it) { if (it.t !== "raw") it.l = v; }); }); };
+      $("mType").onchange = function () { var v = this.value; if (v === "") return; v = v === "tap" ? "" : v; commit(function () { selItems().forEach(function (it) { if (it.t === "n") it.mk = v; }); }); };
+      return;
+    }
+    var it = song.items[sel], x = tl[sel], h = "<b>#" + (sel + 1) + "</b> ";
+    if (it.t === "n") {
+      h += "pitch <select id=iP>" + T.NAMES.map(function (n) { return opt(n, n, it.p); }).join("") + "</select>" +
+        "<select id=iO>" + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (n) { return opt(n, n, it.o); }).join("") + "</select> " +
+        "length <select id=iL>" + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (n) { return opt(n, n, it.l); }).join("") + "</select> " +
+        "type <select id=iM>" + opt("", "tap", "hsx".indexOf(it.mk) >= 0 && it.mk ? "-" : "") + opt("h", "hold", it.mk) + opt("s", "slider", it.mk) + opt("x", "music only", it.mk) +
+        (it.mk && "hsx".indexOf(it.mk) < 0 ? opt(it.mk, "'" + it.mk + "' (tap)", it.mk) : "") + "</select>";
+    } else if (it.t === "r") {
+      h += "rest, length <select id=iL>" + [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(function (n) { return opt(n, n, it.l); }).join("") + "</select>";
+    } else h += "invalid token <span class=mono>" + it.text + "</span> <button id=iFix>make rest</button>";
+    h += " <label class=small title='Only where the file wraps lines; no effect in game'><input type=checkbox id=iBr" + (it.br ? " checked" : "") + "> file line break after</label>";
+    h += " <span class=small>starts " + x.t.toFixed(3) + " s, " + (x.dur * 1000).toFixed(0) + " ms" + (x.d.f > 0 ? ", " + Math.floor(x.d.f) + " Hz" : "") + "</span>";
+    el.innerHTML = h;
+    var on = function (id, fn) { var e = $(id); if (e) e.onchange = function () { var v = this.type === "checkbox" ? this.checked : this.value; commit(function () { fn(v); }); if (it.t === "n") preview(it); }; };
+    on("iP", function (v) { it.p = v; }); on("iO", function (v) { it.o = +v; }); on("iL", function (v) { it.l = +v; });
+    on("iM", function (v) { it.mk = v; }); on("iBr", function (v) { it.br = v; });
+    if ($("iFix")) $("iFix").onclick = function () { commit(function () { song.items[sel] = { t: "r", l: 1, br: it.br }; }); };
+  }
+  function showSel() {
+    var el = $("selInfo");
+    if (sel === null || !song.items[sel]) { el.textContent = "-"; return; }
+    var it = song.items[sel], s = tl[sel], lines = [];
+    lines.push("token  " + T.itemToken(it) + "   start " + s.t.toFixed(3) + " s");
+    if (s.d.f > 0) lines.push("tone   playTone(" + Math.floor(s.d.f) + " Hz, " + (Math.floor(s.dur * 1000) - 25) + " ms)");
+    var n = sim && sim.notes.filter(function (q) { return q.tok === sel; })[0];
+    if (n) {
+      lines.push("circle (" + n.x + "," + n.y + ")" + (n.k === 3 ? " -> end (" + n.x2 + "," + n.y2 + ")" : "") + "  " + ["", "tap", "hold", "slider"][n.k]);
+      lines.push("shows  " + Math.max(n.spawnT, -sim.AP - 1).toFixed(2) + " s, hit " + n.t.toFixed(3) + " s" + (n.k > 1 ? ", ends " + n.e.toFixed(3) + " s" : ""));
+      lines.push("model  " + ($("sModel").value === "auto" ? "auto-play: " + ["", "300", "100", "50", "miss"][n.res || 0] : "no input") + (n.fail || n.fail2 ? "   ! placement overlap" : ""));
+    } else if (s.d.f > 0 && s.d.mk === "x") lines.push("music only: no circle");
+    el.textContent = lines.join("\n"); el.style.whiteSpace = "pre";
+  }
+  function refreshLight() { drawRoll(); showInsp(); showSel(); }
+
+  // ---------- validator ----------
+  function renderVal() {
+    var v = T.validate(song, slot, sim), ul = $("val");
+    var ne = v.filter(function (x) { return x.sev === "err"; }).length, nw = v.filter(function (x) { return x.sev === "warn"; }).length;
+    $("valSum").textContent = ne + " errors · " + nw + " warnings";
+    ul.innerHTML = "";
+    if (!v.length) { ul.innerHTML = "<li class=ok>No problems found.</li>"; return; }
+    v.forEach(function (x) {
+      var li = document.createElement("li");
+      li.className = x.sev;
+      li.textContent = (x.sev === "err" ? "Error: " : x.sev === "warn" ? "Warning: " : "Note: ") + x.msg + (x.item != null && x.item >= 0 ? "  (#" + (x.item + 1) + ")" : "");
+      if (x.item != null && x.item >= 0) li.onclick = function () { setSel(x.item); playhead = tl[x.item] ? tl[x.item].t : 0; scrollTo(x.item); refreshLight(); drawField(); };
+      ul.appendChild(li);
+    });
+  }
+  function scrollTo(i) { var w = $("rollWrap"), x = uX(tl[i] ? tl[i].u : 0); if (x < w.scrollLeft + 60 || x > w.scrollLeft + w.clientWidth - 60) w.scrollLeft = x - w.clientWidth / 3; }
+
+  // ---------- field ----------
+  var fcv = $("field"), fctx = fcv.getContext("2d"), scr = new T.Screen(), off = document.createElement("canvas");
+  off.width = 128; off.height = 64; var octx = off.getContext("2d"), oimg = octx.createImageData(128, 64);
+  var SC = 4, PAD = 4;
+  function blit(texts, overlay) {
+    var px = scr.px;
+    for (var i = 0; i < px.length; i++) {
+      var on = px[i], o = i * 4;
+      oimg.data[o] = on ? 31 : 185; oimg.data[o + 1] = on ? 42 : 199; oimg.data[o + 2] = on ? 26 : 164; oimg.data[o + 3] = 255;
+    }
+    octx.putImageData(oimg, 0, 0);
+    fctx.imageSmoothingEnabled = false;
+    fctx.fillStyle = "#b9c7a4"; fctx.fillRect(0, 0, fcv.width, fcv.height);
+    fctx.drawImage(off, PAD, PAD, 128 * SC, 64 * SC);
+    fctx.fillStyle = "#1f2a1a"; fctx.textBaseline = "top";
+    (texts || scr.texts).forEach(function (t) {
+      fctx.font = (t.big ? 28 : 22) + "px Consolas, monospace";
+      fctx.textAlign = t.right ? "right" : "left";
+      fctx.fillText(t.s, PAD + (t.x + (t.right ? 1 : 0)) * SC, PAD + t.y * SC - 1);
+    });
+    fctx.textAlign = "left";
+    if (overlay) overlay();
+  }
+  function drawField() {
+    if (testing) return;
+    if (!sim) { scr.clear(); blit(); return; }
+    var F = T.frameAt(sim, playhead), st = F >= 0 ? T.simState(sim, F) : null;
+    if (!st) st = { act: [], songT: playhead, AP: sim.AP, cx: 64, cy: 36, held: false, fb: null, score: 0, combo: 0, songLen: sim.songLen };
+    T.drawGame(scr, st);
+    blit(null, function () {
+      if ($("cPath").checked) {
+        var next = sim.notes.filter(function (n) { return n.t > st.songT + 0.0001; }).slice(0, 6);
+        fctx.font = "bold 13px system-ui"; fctx.lineWidth = 1.5;
+        next.forEach(function (n, k) {
+          fctx.strokeStyle = "rgba(36,82,122," + (0.85 - k * 0.11) + ")"; fctx.fillStyle = fctx.strokeStyle;
+          fctx.beginPath(); fctx.arc(PAD + (n.x + 0.5) * SC, PAD + (n.y + 0.5) * SC, K.R * SC, 0, 7); fctx.setLineDash([4, 4]); fctx.stroke(); fctx.setLineDash([]);
+          fctx.fillText(String(k + 1), PAD + (n.x + 0.5) * SC - 4, PAD + (n.y + 0.5) * SC - 7);
+          if (n.k === 3) { fctx.beginPath(); fctx.moveTo(PAD + (n.x + .5) * SC, PAD + (n.y + .5) * SC); fctx.lineTo(PAD + (n.x2 + .5) * SC, PAD + (n.y2 + .5) * SC); fctx.stroke(); }
+        });
+      }
+      var sn = sel !== null && sim.notes.filter(function (n) { return n.tok === sel; })[0];
+      if (sn) { fctx.strokeStyle = "#d9480f"; fctx.lineWidth = 2; fctx.beginPath(); fctx.arc(PAD + (sn.x + .5) * SC, PAD + (sn.y + .5) * SC, (K.R + 2) * SC, 0, 7); fctx.stroke(); }
+    });
+    $("fieldInfo").textContent = "t = " + playhead.toFixed(2) + " s · " + st.act.length + " circle(s) on screen · preview uses s" + slot + " seed " + (slot * 1013 + 7) +
+      (sim.placeFails ? " · " + sim.placeFails + " placement overlap(s)" : "");
+  }
+
+  // ---------- audio ----------
+  var actx = null, master = null, voices = [];
+  function audio() {
+    if (!actx) { var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; actx = new AC(); master = actx.createGain(); master.connect(actx.destination); }
+    if (actx.state === "suspended") actx.resume();
+    master.gain.value = (+$("rVol").value / 100) * 0.5;
+    return actx;
+  }
+  function tone(freq, ms, at) { // square wave like playTone(freq, ms, 0, 0)
+    if (!actx || ms <= 0 || freq <= 0) return;
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = "square"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(0.5, at + 0.003);
+    g.gain.setValueAtTime(0.5, at + ms / 1000 - 0.004); g.gain.linearRampToValueAtTime(0.0001, at + ms / 1000);
+    o.connect(g); g.connect(master); o.start(at); o.stop(at + ms / 1000 + 0.01);
+    voices.push(o); o.onended = function () { var k = voices.indexOf(o); if (k >= 0) voices.splice(k, 1); };
+  }
+  function preview(it) { if (!it || it.t !== "n" || playing || testing) return; if (!audio()) return; var d = T.decodeToken(T.itemToken(it)); tone(Math.floor(d.f), Math.min(300, Math.max(60, Math.floor(d.len * song.u * 1000) - 25)), actx.currentTime + 0.01); }
+  function hush() { voices.slice().forEach(function (o) { try { o.stop(); } catch (e) { /* already stopped */ } }); voices = []; }
+
+  // ---------- playback ----------
+  var playing = null;
+  function play() {
+    if (playing) return stop();
+    if (!song.items.length || !audio()) return;
+    var speed = +$("sSpeed").value, r = selRange(), loop = $("cLoop").checked && r;
+    var a = loop ? tl[r[0]].t : playhead, b = loop ? tl[r[1]].t + tl[r[1]].dur : tl.totalT + 0.6;
+    if (!loop && a >= tl.totalT) a = 0;
+    playing = { speed: speed, a: a, b: b, loop: !!loop };
+    startCycle(a);
+    $("bPlay").innerHTML = "&#9632; Stop";
+    requestAnimationFrame(tick);
+  }
+  function startCycle(from) {
+    hush();
+    var P = playing; P.t0 = actx.currentTime + 0.05; P.from = from;
+    song.items.forEach(function (it, i) {
+      var s = tl[i];
+      if (s.d.f <= 0 || s.t < from - 1e-9 || s.t >= P.b) return;
+      tone(Math.floor(s.d.f), (Math.floor(s.dur * 1000) - 25) / P.speed, P.t0 + (s.t - from) / P.speed);
+    });
+  }
+  function tick() {
+    if (!playing) return;
+    var P = playing, T0 = P.from + (actx.currentTime - P.t0) * P.speed;
+    if (T0 >= P.b) { if (P.loop) { startCycle(P.a); T0 = P.a; } else { stop(); return; } }
+    playhead = Math.max(P.from, T0);
+    var w = $("rollWrap"), x = uX(playhead / song.u);
+    if (x > w.scrollLeft + w.clientWidth - 40 || x < w.scrollLeft) w.scrollLeft = x - 60;
+    drawRoll(); drawField();
+    requestAnimationFrame(tick);
+  }
+  function stop() { playing = null; hush(); $("bPlay").innerHTML = "&#9654; Play"; drawRoll(); drawField(); }
+
+  // ---------- play-test ----------
+  var testing = null, keys = { sa: false, sd: false, mouse: false }, mouseF = { x: 64, y: 36 };
+  function startTest() {
+    if (testing) return endTest();
+    if (playing) stop();
+    if (!song.items.length) return;
+    audio();
+    var E = T.makeEngine(T.songM(song), song.u, song.a, slot, { onTone: function (f, ms) { if (actx) tone(f, ms, actx.currentTime + 0.005); } });
+    testing = { E: E, sw: T.makeSwitches(), t0: performance.now(), last: 0, speed: +$("sTestSpeed").value, step: +$("sTestTick").value };
+    $("bTest").textContent = "Stop test"; $("results").textContent = ""; fcv.focus();
+    requestAnimationFrame(testLoop);
+  }
+  function endTest(msg) { testing = null; hush(); $("bTest").textContent = "Play-test"; if (msg) $("results").innerHTML = msg; drawField(); }
+  function testLoop(now) {
+    if (!testing) return;
+    var S = testing, ticks = Math.floor((performance.now() - S.t0) * S.speed / 10), d = ticks - S.last;
+    if (d >= Math.max(1, S.step)) {
+      S.last = ticks;
+      var cx = Math.max(2, Math.min(126, mouseF.x)), cy = Math.max(9, Math.min(63, mouseF.y));
+      S.E.step(d, S.sw({ cx: cx, cy: cy, sa: (keys.sa || keys.mouse) ? 1024 : 0, sd: keys.sd ? 1024 : 0 }));
+      if (S.E.state === "done") {
+        var r = S.E.result();
+        scr.clear(); blit([{ x: 2, y: 0, s: song.name }, { x: 116, y: 2, s: r.grade, big: true }, { x: 2, y: 12, s: "Score " + r.score }, { x: 2, y: 21, s: "Acc " + Math.floor(r.acc / 10) + "." + r.acc % 10 + "%  combo " + r.maxCombo },
+          { x: 2, y: 30, s: "300:" + r.c300 + " 100:" + r.c100 + " 50:" + r.c50 }, { x: 2, y: 39, s: "Miss:" + r.cMiss + " of " + r.total }]);
+        var keep = testing; testing = null; $("bTest").textContent = "Play-test"; hush();
+        $("results").innerHTML = "<b>Result:</b> grade " + r.grade + " · score " + r.score + " · accuracy " + (r.acc / 10).toFixed(1) + "% · max combo " + r.maxCombo + "<br>300: " + r.c300 + " · 100: " + r.c100 + " · 50: " + r.c50 + " · miss: " + r.cMiss + " of " + r.total;
+        void keep; return;
+      }
+    }
+    T.drawGame(scr, S.E.drawState()); blit();
+    requestAnimationFrame(testLoop);
+  }
+  function fieldPos(e) { var b = fcv.getBoundingClientRect(), k = fcv.width / b.width; return { x: ((e.clientX - b.left) * k - PAD) / SC, y: ((e.clientY - b.top) * k - PAD) / SC }; }
+  fcv.addEventListener("mousemove", function (e) { var p = fieldPos(e); mouseF.x = p.x; mouseF.y = p.y; });
+  fcv.addEventListener("mousedown", function (e) { if (testing) { keys.mouse = true; e.preventDefault(); } });
+  window.addEventListener("mouseup", function () { keys.mouse = false; });
+  fcv.addEventListener("contextmenu", function (e) { if (testing) e.preventDefault(); });
+
+  // ---------- keyboard ----------
+  window.addEventListener("keydown", function (e) {
+    if (testing) {
+      if (e.code === "KeyZ" || e.code === "Space") { keys.sa = true; e.preventDefault(); }
+      else if (e.code === "KeyX") { keys.sd = true; e.preventDefault(); }
+      else if (e.code === "Escape") endTest("Stopped.");
+      return;
+    }
+    var tg = e.target.tagName;
+    if (tg === "INPUT" || tg === "TEXTAREA" || tg === "SELECT") return;
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
+    if ((e.ctrlKey || e.metaKey) && e.code === "KeyY") { e.preventDefault(); return redo(); }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var it = sel !== null ? song.items[sel] : null, k = e.key;
+    if (e.code === "Space") { e.preventDefault(); play(); }
+    else if (k === "Home") { playhead = -song.a; drawRoll(); drawField(); }
+    else if (k === "ArrowLeft" || k === "ArrowRight") { e.preventDefault(); var n = sel === null ? 0 : sel + (k === "ArrowLeft" ? -1 : 1); if (n >= 0 && n < song.items.length) { setSel(n, e.shiftKey); playhead = tl[n].t; scrollTo(n); refreshLight(); drawField(); preview(song.items[n]); } }
+    else if ((k === "ArrowUp" || k === "ArrowDown") && sel !== null) { e.preventDefault(); var dd = (k === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 12 : 1); if (commit(function () { T.transpose(selItems(), dd); })) preview(song.items[sel]); }
+    else if (/^[0-9]$/.test(k) && sel !== null) { commit(function () { selItems().forEach(function (q) { if (q.t !== "raw") q.l = +k; }); }); }
+    else if ("thsx".indexOf(k.toLowerCase()) >= 0 && k.length === 1 && sel !== null) { var mk = { t: "", h: "h", s: "s", x: "x" }[k.toLowerCase()]; commit(function () { selItems().forEach(function (q) { if (q.t === "n") q.mk = mk; }); }); }
+    else if (k.toLowerCase() === "n") addAfter(false);
+    else if (k.toLowerCase() === "r") addAfter(true);
+    else if (k.toLowerCase() === "b" && it) commit(function () { it.br = !it.br; });
+    else if ((k === "Delete" || k === "Backspace") && sel !== null) { e.preventDefault(); delSel(); }
+    else if (k === "Escape") { setSel(null); refreshLight(); drawField(); }
+  });
+  window.addEventListener("keyup", function (e) { if (e.code === "KeyZ" || e.code === "Space") keys.sa = false; if (e.code === "KeyX") keys.sd = false; });
+  window.addEventListener("blur", function () { keys.sa = keys.sd = keys.mouse = false; });
+
+  // ---------- edit ops ----------
+  function addAfter(rest) {
+    var r = selRange(), at = r ? r[1] + 1 : song.items.length, base = r ? song.items[r[1]] : null;
+    commit(function () {
+      var it = rest ? { t: "r", l: +$("sNewLen").value, br: false } : (base && base.t === "n" ? { t: "n", p: base.p, o: base.o, l: base.l, mk: base.mk === "x" ? "x" : "", br: false } : { t: "n", p: "C", o: 5, l: +$("sNewLen").value, mk: "", br: false });
+      song.items.splice(at, 0, it); setSel(at);
+    });
+  }
+  function delSel() { var r = selRange(); if (!r) return; commit(function () { song.items.splice(r[0], r[1] - r[0] + 1); setSel(Math.min(r[0], song.items.length - 1)); }); }
+  function undo() { if (!undoS.length) return; redoS.push(snap()); restore(undoS.pop()); refresh(); }
+  function redo() { if (!redoS.length) return; undoS.push(snap()); restore(redoS.pop()); refresh(); }
+  $("bUndo").onclick = undo; $("bRedo").onclick = redo;
+  $("bAddN").onclick = function () { addAfter(false); };
+  $("bAddR").onclick = function () { addAfter(true); };
+  $("bDel").onclick = delSel;
+  $("bDup").onclick = function () { var r = selRange(); if (!r) return; commit(function () { var c = JSON.parse(JSON.stringify(song.items.slice(r[0], r[1] + 1))); Array.prototype.splice.apply(song.items, [r[1] + 1, 0].concat(c)); sel = r[1] + c.length; anchor = r[1] + 1; }); };
+  Array.prototype.forEach.call(document.querySelectorAll("[data-tr]"), function (b) {
+    b.onclick = function () { var n = +b.getAttribute("data-tr"), all = $("sTrScope").value === "all"; if (!all && sel === null) return toast("Select notes first (or choose whole song)."); commit(function () { T.transpose(all ? song.items : selItems(), n); }); };
+  });
+  $("bNotes").onclick = function () {
+    var items;
+    try { items = T.parseNoteInput($("iNotes").value, +$("sNewLen").value); } catch (e) { return toast(e.message); }
+    if (!items.length) return;
+    var mode = $("sNotesMode").value, r = selRange();
+    commit(function () {
+      if (mode === "all") { song.items = items; setSel(0); return; }
+      if (mode === "append" || !r) { var at0 = song.items.length; Array.prototype.push.apply(song.items, items); sel = song.items.length - 1; anchor = at0; return; }
+      var at = mode === "replace" ? r[0] : r[1] + 1;
+      Array.prototype.splice.apply(song.items, [at, mode === "replace" ? r[1] - r[0] + 1 : 0].concat(items));
+      anchor = at; sel = at + items.length - 1;
+    });
+  };
+  $("bQuant").onclick = function () {
+    var g = Math.max(1, Math.min(8, +$("iQ").value || 1)), all = $("sQScope").value === "all", r = selRange();
+    if (!all && !r) return toast("Select notes first (or choose whole song).");
+    commit(function () {
+      var a = all ? 0 : r[0], b = all ? song.items.length - 1 : r[1];
+      var q = T.quantize(song.items.slice(a, b + 1), g);
+      Array.prototype.splice.apply(song.items, [a, b - a + 1].concat(q));
+      anchor = a; sel = a + q.length - 1;
+    });
+  };
+  $("bMelApply").onclick = function () {
+    commit(function () {
+      var lines = $("tMel").value.split("\n"), items = [];
+      lines.forEach(function (l) { var tk = T.luaTokens(l); tk.forEach(function (t) { items.push(T.itemFromToken(t.w)); }); if (items.length && tk.length) items[items.length - 1].br = true; });
+      if (items.length) items[items.length - 1].br = false;
+      song.items = items; setSel(null);
+    });
+  };
+
+  // ---------- song fields ----------
+  $("iName").oninput = function () { var v = this.value; commit(function () { song.name = v; }); };
+  $("iDiff").oninput = function () { var v = this.value; commit(function () { song.diff = v; }); };
+  $("iSlot").onchange = function () { var v = Math.max(1, Math.min(99, Math.round(+this.value) || 1)); commit(function () { slot = v; }); };
+  $("iU").onchange = function () { var v = +this.value; if (!(v > 0)) return refresh(); commit(function () { song.u = v; }); };
+  $("iA").onchange = function () { var v = +this.value; if (!(v > 0)) return refresh(); commit(function () { song.a = v; }); };
+  $("iBpm").onchange = function () { var b = +this.value, upb = +$("iUpb").value || 2; if (!(b > 0)) return refresh(); commit(function () { song.u = Math.round(60 / (b * upb) * 1000) / 1000; }); };
+  $("iUpb").onchange = function () { refresh(); };
+  $("tComments").onchange = function () { var v = this.value; commit(function () { song.comments = v.split("\n").filter(function (l) { return l.trim(); }); }); };
+  ["sModel", "sTick"].forEach(function (id) { $(id).onchange = runSim; });
+  $("cPath").onchange = drawField; $("cLoop").onchange = drawRoll;
+  for (var L = 1; L <= 9; L++) $("sNewLen").insertAdjacentHTML("beforeend", "<option" + (L === 2 ? " selected" : "") + ">" + L + "</option>");
+
+  // ---------- import / export ----------
+  function load(text, n, label) {
+    var s;
+    try { s = T.parseSong(text); } catch (e) { return toast("Import failed: " + e.message); }
+    var msg = [];
+    if (!s.hadHeader) msg.push("no '-- @Name|Difficulty' first line (added on export)");
+    if (s.uMissing) msg.push("u missing (game default 0.25)");
+    if (s.aMissing) msg.push("a missing (game default 1.4)");
+    pushUndo(); song = s; if (n) slot = n; setSel(null); playhead = -song.a;
+    refresh();
+    toast("Loaded " + (label || song.name) + (msg.length ? " - " + msg.join(", ") : ""));
+  }
+  BUILTIN.forEach(function (b, i) { $("bBuiltin").insertAdjacentHTML("beforeend", "<option value='" + i + "'>s" + b.n + ".lua - " + (T.parseSong(b.text).name) + "</option>"); });
+  $("bBuiltin").onchange = function () { var b = BUILTIN[+this.value]; this.value = ""; if (b) load(b.text, b.n, "s" + b.n + ".lua"); };
+  $("bImport").onclick = function () { $("fileIn").click(); };
+  $("fileIn").onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    var m = /^s(\d+)\.lua/i.exec(f.name), rd = new FileReader();
+    rd.onload = function () { load(rd.result, m ? +m[1] : null, f.name); };
+    rd.readAsText(f); this.value = "";
+  };
+  $("bPaste").onclick = function () { $("pasteDlg").style.display = "block"; $("tPaste").focus(); };
+  $("bPasteCancel").onclick = function () { $("pasteDlg").style.display = "none"; };
+  $("bPasteOk").onclick = function () { $("pasteDlg").style.display = "none"; load($("tPaste").value, null, "pasted song"); };
+  $("bNew").onclick = function () { pushUndo(); song = T.newSong(); slot = 6; setSel(null); playhead = 0; refresh(); };
+  $("bExport").onclick = function () {
+    var txt = T.exportSong(song), a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" }));
+    a.download = "s" + slot + ".lua"; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    toast("Saved s" + slot + ".lua - copy it to /SCRIPTS/GAMES/RHYTHM/ and delete s" + slot + ".luac");
+  };
+  $("bCopy").onclick = function () {
+    var txt = T.exportSong(song);
+    var fallback = function () { var ta = $("tOut"); ta.focus(); ta.select(); try { document.execCommand("copy"); toast("Copied."); } catch (e) { toast("Select the text in Export and copy it."); } };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function () { toast("Copied s" + slot + ".lua text."); }, fallback); else fallback();
+  };
+  $("bPlay").onclick = play;
+  $("bHome").onclick = function () { playhead = -song.a; $("rollWrap").scrollLeft = 0; drawRoll(); drawField(); };
+  $("bTest").onclick = startTest;
+  window.addEventListener("resize", drawRoll);
+
+  // ---------- start ----------
+  var saved = null;
+  try { saved = localStorage.getItem(LS); } catch (e) { /* storage unavailable */ }
+  if (saved) { try { restore(saved); } catch (e) { saved = null; } }
+  if (!saved || !song || !song.items) {
+    if (BUILTIN.length) { song = T.parseSong(BUILTIN[0].text); slot = BUILTIN[0].n; } else { song = T.newSong(); slot = 6; }
+  }
+  playhead = -song.a;
+  refresh();
+})();
+</script>
+</body>
+</html>
