@@ -180,6 +180,24 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
     <label>u = <input id="fU" type="text" size="5"> s per unit</label>
     <span id="mInfo" style="color:var(--dim)"></span>
   </div>
+  <div class="bar" style="margin-top:6px">
+    <button id="mDraw" class="on" title="Draw: click empty space to place notes (Shift/Ctrl+drag still box-selects)">&#9998; Draw</button><button id="mSelT" title="Select: drag on empty space to box-select, click notes to pick them (Shift adds/removes)">&#9633; Select</button>
+    <span style="color:var(--line)">|</span>
+    <button id="mAll" title="Ctrl+A">All</button><button id="mNone" title="Esc">None</button>
+    <button id="mCut" title="Ctrl+X">Cut</button><button id="mCopy" title="Ctrl+C">Copy</button><button id="mPaste" title="Ctrl+V: paste at the yellow cursor (click the roll to move it)">Paste</button>
+    <button id="mDup" title="Ctrl+D: copy the selection right after itself">Duplicate</button><button id="mDel" title="Del">Delete</button>
+    <span style="color:var(--line)">|</span>
+    <button id="mUndo" title="Ctrl+Z">Undo</button><button id="mRedo" title="Ctrl+Y">Redo</button>
+  </div>
+  <div class="bar" style="margin-top:4px">
+    Transpose <button data-mtr="-12" title="Shift+Down">&minus;oct</button><button data-mtr="-1" title="Down">&minus;1</button><button data-mtr="1" title="Up">+1</button><button data-mtr="12" title="Shift+Up">+oct</button>
+    <span style="color:var(--line)">|</span>
+    <button id="mSlow" title="Stretch the selection: twice as long">Stretch &times;2</button><button id="mFast" title="Squeeze the selection: half as long">Squeeze &divide;2</button>
+    <button id="mRev" title="Play the selection backwards">Reverse</button><button id="mLeg" title="Lengthen each selected note up to the next note (no gaps)">Legato</button>
+    <span style="color:var(--line)">|</span>
+    <button id="mIns" title="Push everything from the cursor one bar (16 units) later">Insert bar</button><button id="mRem" title="Remove the selection's time span and close the gap">Remove time</button>
+    <button id="mPlayC" title="Play from the yellow cursor">&#9654; from cursor</button>
+  </div>
   <div id="rollwrap"><canvas id="roll" width="900" height="580"></canvas></div>
   <div class="bar" style="margin-top:6px">
     <span>new note length <b id="mLen" class="mono">2</b> units</span>
@@ -192,7 +210,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
   <textarea id="fM" rows="3" spellcheck="false"></textarea>
   <div id="mErr" style="margin-top:4px"></div>
   <div class="note">Format (from <code>phys.lua</code>): tokens separated by spaces. A note is <code>&lt;letter&gt;[#]&lt;octave digit&gt;&lt;length digit&gt;</code>, e.g. <code>C42</code> = C4 for 2 units, <code>A#31</code> = A#3 for 1 unit. <code>R&lt;n&gt;</code> = rest of n units. One unit lasts <code>u</code> seconds. The tune loops and restarts with every attempt. Sharps only (no flats). Anything else plays as a 1-unit rest on the radio.
-  <br><b>Piano roll</b> (like FL Studio): one column = one unit (thin lines), a beat = 4 units, a bar = 16 units (numbered). <b>Left click</b> an empty cell places a note with the current length (click again on it to hear it), <b>left drag</b> a note moves it in time and pitch, drag its <b>right edge</b> to change its length, <b>right click</b> (or right drag across notes) deletes. <b>Shift/Ctrl+drag</b> = box select (Shift adds). With the roll focused: <span class="kbd">Del</span> deletes the selection, <span class="kbd">Ctrl+C</span>/<span class="kbd">Ctrl+V</span> copy / paste at the mouse, <span class="kbd">Ctrl+A</span> selects all, arrows move the selection (<span class="kbd">Shift</span> = octave), <span class="kbd">Ctrl</span>+wheel on a note = length. The tune is one voice: a note placed over others cuts them. Gaps are written as rests; notes longer than 9 units as tied notes (<code>C49 C43</code>). The red line is the loop end. Click the keyboard on the left to hear a pitch.</div>
+  <br><b>Piano roll</b> (like FL Studio): one column = one unit (thin lines), a beat = 4 units, a bar = 16 units (numbered). <b>Left click</b> an empty cell places a note with the current length (click again on it to hear it), <b>left drag</b> a note moves it in time and pitch, drag its <b>right edge</b> to change its length, <b>right click</b> (or right drag across notes) deletes. <b>Shift/Ctrl+drag</b> = box select (Shift adds), or switch to <b>Select</b> mode so a plain drag box-selects. Clicking the roll also moves the yellow <b>cursor</b>: Paste, Insert bar and &#9654; from cursor work from there. The buttons above the roll do cut / copy / paste / duplicate / transpose / stretch / reverse / legato on the selected notes. With the roll focused: <span class="kbd">Ctrl+X</span> cut, <span class="kbd">Ctrl+D</span> duplicate, <span class="kbd">Del</span> deletes the selection, <span class="kbd">Ctrl+C</span>/<span class="kbd">Ctrl+V</span> copy / paste at the mouse, <span class="kbd">Ctrl+A</span> selects all, arrows move the selection (<span class="kbd">Shift</span> = octave), <span class="kbd">Ctrl</span>+wheel on a note = length. The tune is one voice: a note placed over others cuts them. Gaps are written as rests; notes longer than 9 units as tied notes (<code>C49 C43</code>). The red line is the loop end. Click the keyboard on the left to hear a pitch.</div>
 </section>
 
 <section class="panel" id="p-export">
@@ -1634,7 +1652,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   window.addEventListener("keydown", function (e) {
     if (play.running && handlePlayKey(e)) return;
     if (typing(e)) return;
-    if (document.activeElement === roll && rollKey(e)) return;
+    if ((document.activeElement === roll || activeTab === "music") && rollKey(e)) return;
     var k = e.key, ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && (k === "z" || k === "Z")) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (ctrl && (k === "y" || k === "Y")) { e.preventDefault(); redo(); return; }
@@ -1849,7 +1867,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   roll.tabIndex = 0;
   var UNIT = 16, ROW = 10, KEYW = 44, LO = 43, HI = 100;   // G2 .. E7 (the beeper plays 100-8000 Hz)
   var NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  var rsel = [], rclip = null, lastLen = 2, rdrag = null, rhover = null;
+  var rsel = [], rclip = null, lastLen = 2, rdrag = null, rhover = null, rcur = 0, rtool = "draw";
   function tokens() { return GD.tuneTokens(doc.m); }
   function noteStr(midi, len) { var oct = Math.floor(midi / 12) - 1; return NAMES[midi % 12] + oct + len; }
   function freqOf(midi) { return Math.floor(440 * Math.pow(2, (midi - 69) / 12)); }
@@ -1948,6 +1966,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (rhover && !rdrag && rhover.t >= 0 && rhover.midi >= LO && rhover.midi <= HI && !noteAt(rhover.t, rhover.midi)) {
       rctx.strokeStyle = "rgba(95,179,255,0.6)"; rctx.strokeRect(KEYW + rhover.t * UNIT + 0.5, (HI - rhover.midi) * ROW + 0.5, lastLen * UNIT - 1, ROW - 2);
     }
+    rctx.fillStyle = "#ffd84a"; rctx.fillRect(KEYW + rcur * UNIT, 0, 1, H);
+    rctx.beginPath(); rctx.moveTo(KEYW + rcur * UNIT - 4, sy); rctx.lineTo(KEYW + rcur * UNIT + 5, sy); rctx.lineTo(KEYW + rcur * UNIT + 0.5, sy + 6); rctx.fill();
     if (playT != null) { rctx.fillStyle = "#6fdc8c"; rctx.fillRect(KEYW + playT * UNIT, 0, 2, H); }
     // sticky keyboard and bar numbers
     rctx.fillStyle = "#101317"; rctx.fillRect(sx, 0, KEYW, H);
@@ -1978,6 +1998,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var c = cellOf(e);
     if (c.px < (rollwrap.scrollLeft || 0) + KEYW) { if (c.midi >= LO && c.midi <= HI) beep(freqOf(c.midi), 150); return; }
     if (c.t < 0 || c.midi < LO || c.midi > HI) return;
+    if (e.button === 0) rcur = c.t;
     pushUndo();
     if (e.button === 2) {   // right click / right drag deletes
       rdrag = { mode: "erase" };
@@ -1986,8 +2007,13 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       return;
     }
     if (e.button !== 0) return;
-    if (e.shiftKey || e.ctrlKey || e.metaKey) { rdrag = { mode: "box", x0: c.px, y0: c.py, x1: c.px, y1: c.py, add: e.shiftKey }; return; }
     var n = noteAt(c.t, c.midi);
+    if (n && e.shiftKey) {   // Shift+click toggles a note in the selection
+      var at = rsel.indexOf(n);
+      if (at >= 0) rsel.splice(at, 1); else rsel.push(n);
+      drawRoll(); return;
+    }
+    if (e.ctrlKey || e.metaKey || (e.shiftKey && !n) || (rtool === "select" && !n)) { rdrag = { mode: "box", x0: c.px, y0: c.py, x1: c.px, y1: c.py, add: e.shiftKey }; drawRoll(); return; }
     if (n) {
       beep(freqOf(n.midi), 150);
       if (rsel.indexOf(n) < 0) rsel = [n];
@@ -2061,21 +2087,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function rollKey(e) {
     var k = e.key, ctrl = e.ctrlKey || e.metaKey;
     if (ctrl && (k === "a" || k === "A")) { rsel = TL.notes.slice(); drawRoll(); }
-    else if (ctrl && (k === "c" || k === "C")) {
-      if (!rsel.length) return false;
-      var t0 = Math.min.apply(null, rsel.map(function (n) { return n.t; }));
-      rclip = rsel.map(function (n) { return { t: n.t - t0, len: n.len, midi: n.midi }; });
-      toast("Copied " + rclip.length + " note(s).");
-    } else if (ctrl && (k === "v" || k === "V")) {
-      if (!rclip) return false;
-      var at = rhover && rhover.t >= 0 ? rhover.t : rsel.length ? Math.max.apply(null, rsel.map(function (n) { return n.t + n.len; })) : TL.total;
-      pushUndo();
-      var add = rclip.map(function (q) { return { t: q.t + at, len: q.len, midi: q.midi }; });
-      TL.notes = TL.notes.concat(add); resolve(add); rsel = add; commitTL();
-    } else if (k === "Delete" || k === "Backspace") {
-      if (!rsel.length) return false;
-      pushUndo(); TL.notes = TL.notes.filter(function (n) { return rsel.indexOf(n) < 0; }); rsel = []; commitTL();
-    } else if (k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight") {
+    else if (ctrl && (k === "c" || k === "C")) rCopy();
+    else if (ctrl && (k === "x" || k === "X")) rCut();
+    else if (ctrl && (k === "d" || k === "D")) rDup();
+    else if (ctrl && (k === "v" || k === "V")) rPaste(rhover && rhover.t >= 0 ? rhover.t : rcur);
+    else if (k === "Delete" || k === "Backspace") rDel();
+    else if (k === "ArrowUp" || k === "ArrowDown" || k === "ArrowLeft" || k === "ArrowRight") {
       if (!rsel.length) return false;
       var dm = k === "ArrowUp" ? (e.shiftKey ? 12 : 1) : k === "ArrowDown" ? (e.shiftKey ? -12 : -1) : 0, dt = k === "ArrowLeft" ? -1 : k === "ArrowRight" ? 1 : 0;
       if (rsel.some(function (n) { return n.t + dt < 0 || n.midi + dm < LO || n.midi + dm > HI; })) return true;
@@ -2085,6 +2102,82 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     else return false;
     e.preventDefault(); return true;
   }
+  // ---- selection editing (buttons above the roll and keys) ----
+  function selStart() { return Math.min.apply(null, rsel.map(function (n) { return n.t; })); }
+  function selEnd() { return Math.max.apply(null, rsel.map(function (n) { return n.t + n.len; })); }
+  function needSel() { if (rsel.length) return true; toast("Select some notes first (Select mode, or Shift+drag).", true); return false; }
+  function rCopy() {
+    if (!needSel()) return;
+    var t0 = selStart();
+    rclip = { len: selEnd() - t0, notes: rsel.map(function (n) { return { t: n.t - t0, len: n.len, midi: n.midi }; }) };
+    toast("Copied " + rsel.length + " note(s).");
+  }
+  function rDel() { if (!needSel()) return; pushUndo(); TL.notes = TL.notes.filter(function (n) { return rsel.indexOf(n) < 0; }); rsel = []; commitTL(); }
+  function rCut() { if (!needSel()) return; rCopy(); rcur = selStart(); rDel(); }
+  function rPaste(at) {
+    if (!rclip) { toast("Nothing copied yet.", true); return; }
+    pushUndo();
+    var add = rclip.notes.map(function (q) { return { t: q.t + at, len: q.len, midi: q.midi }; });
+    TL.notes = TL.notes.concat(add); resolve(add); rsel = add; rcur = at + rclip.len; commitTL();
+  }
+  function rDup() {
+    if (!needSel()) return;
+    var t0 = selStart(), span = selEnd() - t0;
+    pushUndo();
+    var add = rsel.map(function (n) { return { t: n.t + span, len: n.len, midi: n.midi }; });
+    TL.notes = TL.notes.concat(add); resolve(add); rsel = add; rcur = t0 + 2 * span; commitTL();
+  }
+  function rEdit(fn) { if (!needSel()) return; pushUndo(); fn(selStart(), selEnd()); resolve(rsel.slice()); commitTL(); }
+  function rTranspose(d) {
+    if (!needSel()) return;
+    if (rsel.some(function (n) { return n.midi + d < LO || n.midi + d > HI; })) { toast("That goes off the keyboard (G2..E7).", true); return; }
+    rEdit(function () { rsel.forEach(function (n) { n.midi += d; }); });
+    if (rsel.length === 1) beep(freqOf(rsel[0].midi), 120);
+  }
+  function rScale(f) {
+    rEdit(function (t0) {
+      rsel.forEach(function (n) { n.t = t0 + Math.round((n.t - t0) * f); n.len = Math.max(1, Math.min(32, Math.round(n.len * f))); });
+      // squeezing can stack two notes on one start: keep the first
+      var seen = {};
+      rsel = rsel.filter(function (n) { if (seen[n.t]) { TL.notes.splice(TL.notes.indexOf(n), 1); return false; } seen[n.t] = 1; return true; });
+    });
+  }
+  function rReverse() { rEdit(function (t0, t1) { rsel.forEach(function (n) { n.t = t0 + (t1 - (n.t + n.len)); }); }); }
+  function rLegato() {
+    rEdit(function () {
+      rsel.forEach(function (n) {
+        var next = TL.total;
+        TL.notes.forEach(function (o) { if (o !== n && o.t > n.t && o.t < next) next = o.t; });
+        n.len = Math.max(n.len, Math.min(32, next - n.t));
+      });
+    });
+  }
+  function rShiftFrom(at, d) { TL.notes.forEach(function (n) { if (n.t >= at) n.t += d; }); TL.total = Math.max(0, TL.total + d); }
+  function rInsertBar() { pushUndo(); rShiftFrom(rcur, 16); commitTL(); toast("Inserted a bar at unit " + rcur + "."); }
+  function rRemoveTime() {
+    if (!needSel()) return;
+    var t0 = selStart(), t1 = selEnd();
+    pushUndo();
+    TL.notes = TL.notes.filter(function (n) { return n.t < t0 || n.t >= t1; });
+    TL.notes.forEach(function (n) { if (n.t < t0 && n.t + n.len > t0) n.len = t0 - n.t; });
+    TL.notes.forEach(function (n) { if (n.t >= t1) n.t -= t1 - t0; });
+    TL.total = Math.max(0, TL.total - (t1 - t0));
+    rsel = []; rcur = t0;
+    doc.m = tlText(TL.notes, TL.total); TL.src = doc.m; changed(); updateMusicInfo(); drawRoll();
+  }
+  function setRTool(t) { rtool = t; $("mDraw").classList.toggle("on", t === "draw"); $("mSelT").classList.toggle("on", t === "select"); roll.style.cursor = t === "draw" ? "crosshair" : "default"; }
+  $("mDraw").onclick = function () { setRTool("draw"); };
+  $("mSelT").onclick = function () { setRTool("select"); };
+  $("mAll").onclick = function () { rsel = TL.notes.slice(); drawRoll(); };
+  $("mNone").onclick = function () { rsel = []; drawRoll(); };
+  $("mCut").onclick = rCut; $("mCopy").onclick = rCopy; $("mPaste").onclick = function () { rPaste(rcur); };
+  $("mDup").onclick = rDup; $("mDel").onclick = rDel;
+  $("mUndo").onclick = function () { undo(); }; $("mRedo").onclick = function () { redo(); };
+  document.querySelectorAll("[data-mtr]").forEach(function (b) { b.onclick = function () { rTranspose(+b.dataset.mtr); }; });
+  $("mSlow").onclick = function () { rScale(2); }; $("mFast").onclick = function () { rScale(0.5); };
+  $("mRev").onclick = rReverse; $("mLeg").onclick = rLegato;
+  $("mIns").onclick = rInsertBar; $("mRem").onclick = rRemoveTime;
+  $("mPlayC").onclick = function () { playMusicPreview(rcur); };
   $("mLm").onclick = function () { lastLen = Math.max(1, lastLen - 1); if (rsel.length) { pushUndo(); rsel.forEach(function (n) { n.len = lastLen; }); resolve(rsel.slice()); commitTL(); } else drawRoll(); };
   $("mLp").onclick = function () { lastLen = Math.min(9, lastLen + 1); if (rsel.length) { pushUndo(); rsel.forEach(function (n) { n.len = lastLen; }); resolve(rsel.slice()); commitTL(); } else drawRoll(); };
   $("mTrim").onclick = function () { var end = 0; TL.notes.forEach(function (n) { end = Math.max(end, n.t + n.len); }); pushUndo(); TL.total = end; doc.m = tlText(TL.notes, end); TL.src = doc.m; changed(); updateMusicInfo(); drawRoll(); };
@@ -2105,7 +2198,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     rollwrap.scrollLeft = 0;
   }
 
-  function playMusicPreview() {
+  function playMusicPreview(fromUnit) {
     stopMusicPreview();
     var a = audio(); if (!a) { toast("No WebAudio in this browser."); return; }
     var tk = tokens(), units = 0;
@@ -2113,6 +2206,12 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (!tk.length || units <= 0) { toast("The tune is empty (or every token has length 0)."); return; }
     var U = Number(doc.u); if (doc.u === "" || isNaN(U) || U <= 0) U = 0.1;
     var st = { idx: 0, t: a.currentTime + 0.05, start: a.currentTime + 0.05, unit: 0, loop: 0, timer: null };
+    if (typeof fromUnit === "number" && fromUnit > 0) {   // start at the token under the cursor
+      var acc = 0;
+      while (st.idx < tk.length && acc + tk[st.idx].len <= fromUnit) { acc += tk[st.idx].len; st.idx++; }
+      if (st.idx >= tk.length) { st.idx = 0; acc = 0; }
+      st.start -= acc * U;
+    }
     mPlay = st;
     function sched() {
       var a2 = audio();

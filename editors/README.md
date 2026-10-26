@@ -31,7 +31,10 @@ So adding a level or song **never needs a change to the game**. Two rules:
 3. Paint the level. Pick a tile from the palette (or type its character), left-drag paints, right-drag erases.
    The **Help** tab explains every tile: blocks, slabs, spikes, orbs, pads and portals.
 4. Write the music in the **Music** tab: a piano roll like FL Studio (left click adds a note, drag moves it, drag
-   its right edge to resize, right click deletes, Shift/Ctrl-drag selects) and press Play to hear it.
+   its right edge to resize, right click deletes, Shift/Ctrl-drag selects) and press Play to hear it. The buttons
+   above the roll edit the selection: Draw / Select mode, cut, copy, paste (at the yellow cursor, set by clicking the
+   roll), duplicate, delete, undo/redo, transpose, stretch / squeeze, reverse, legato, insert bar, remove time and
+   play from the cursor. Keys: Ctrl+A/X/C/V/D, Del, arrows (Shift = octave).
 5. Press **Play-test** to try it (Space or the mouse button = SA, held as long as you hold it; Enter = a tap), then
    **Check beatable**. The solver searches taps and holds, says whether the level can be finished and marks
    presses and releases that need very exact timing (red = under 60 ms, too tight for the radio).
