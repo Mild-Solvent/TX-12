@@ -1,3 +1,4 @@
+-- @Ode to Joy|EASY
 -- Ode to Joy (Beethoven, 9th symphony). EASY
 -- token: note+octave+length[mark]; length in units of u seconds
 -- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest

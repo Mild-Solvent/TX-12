@@ -1,3 +1,4 @@
+-- @Korobeiniki|HARD
 -- Korobeiniki (Russian folk song, the "Tetris" theme). HARD
 -- token: note+octave+length[mark]; length in units of u seconds
 -- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest

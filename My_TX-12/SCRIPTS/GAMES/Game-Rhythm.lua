@@ -8,7 +8,8 @@ local R, HR, FOLLOW, RING = 7, 11, 13, 21
 local W300, W100, W50 = 0.10, 0.18, 0.26  -- timing windows (s, either side)
 local DATA = "/SCRIPTS/GAMES/RHYTHM/s"
 local SAVE = "/SCRIPTS/GAMES/rhythm.dat"
-local NSONG = 5
+local NSONG = 0
+local top = 1  -- first song row shown in the picker
 local NOTES = "C C#D D#E F F#G G#A A#B "
 
 local state, sel, names, diffs, bestS, bestA, dirty, msg
@@ -23,10 +24,22 @@ local function grade(acc)
   return string.sub("SABCD", k, k)
 end
 
+-- Level/song files are counted on the card (1, 2, 3, ... until one is
+-- missing, max 99). Each file's first line names it: "-- @Name|Difficulty".
+local function fileHeader(path)
+  local ok, f = pcall(io.open, path, "r")
+  if not ok or not f then return nil end
+  local ok2, s = pcall(io.read, f, 80)
+  pcall(io.close, f)
+  if not ok2 or type(s) ~= "string" then return "", "" end
+  local n, d = string.match(s, "^%-%- @([^|%c]*)|([^%c]*)")
+  return n or "", d or ""
+end
+
 local function loadBest()
   local ok, f = pcall(io.open, SAVE, "r")
   if not ok or not f then return end
-  local ok2, s = pcall(io.read, f, 200)
+  local ok2, s = pcall(io.read, f, 1200)
   pcall(io.close, f)
   if not ok2 or type(s) ~= "string" then return end
   local i = 1
@@ -50,10 +63,13 @@ end
 
 local function init()
   names, diffs, bestS, bestA = {}, {}, {}, {}
-  local i = 1
-  for n, d in string.gmatch("Twinkle Twinkle|EASY;Ode to Joy|EASY;Jingle Bells|NORMAL;Korobeiniki|HARD;Fur Elise|EXPERT;", "([^|]+)|([^;]+);") do
-    names[i], diffs[i], bestS[i], bestA[i] = n, d, 0, 0
-    i = i + 1
+  NSONG = 0
+  for i = 1, 99 do
+    local n, d = fileHeader(DATA .. i .. ".lua")
+    if not n then break end
+    NSONG = i
+    names[i] = (n ~= "" and n) or ("Song " .. i)
+    diffs[i], bestS[i], bestA[i] = d, 0, 0
   end
   dirty = false
   loadBest()
@@ -351,11 +367,13 @@ local function drawPick()
   lcd.clear()
   lcd.drawText(0, 0, "RHYTHM", SMLSIZE + INVERS)
   lcd.drawText(LCD_W - 1, 0, "ENTER/SA play", SMLSIZE + RIGHT)
-  for i = 1, NSONG do
-    local y = 9 + (i - 1) * 8
+  if sel < top then top = sel elseif sel > top + 4 then top = sel - 4 end
+  for i = top, math.min(NSONG, top + 4) do
+    local y = 9 + (i - top) * 8
     lcd.drawText(2, y, names[i] or "?", SMLSIZE + (i == sel and INVERS or 0))
     lcd.drawText(LCD_W - 1, y, diffs[i] or "", SMLSIZE + RIGHT)
   end
+  if NSONG == 0 then lcd.drawText(2, 17, "No songs in RHYTHM/", SMLSIZE) end
   local s, a = bestS[sel] or 0, bestA[sel] or 0
   if msg then
     lcd.drawText(2, 50, msg, SMLSIZE)
@@ -401,7 +419,8 @@ local function run(event)
     update(press)
     if state == "play" then draw() else drawDone() end
   elseif state == "pick" then
-    if event == EVT_VIRTUAL_NEXT then sel = sel % NSONG + 1; msg = nil
+    if NSONG == 0 then
+    elseif event == EVT_VIRTUAL_NEXT then sel = sel % NSONG + 1; msg = nil
     elseif event == EVT_VIRTUAL_PREV then sel = (sel + NSONG - 2) % NSONG + 1; msg = nil end
     if press then startSong() end
     if state == "pick" then drawPick() else draw() end

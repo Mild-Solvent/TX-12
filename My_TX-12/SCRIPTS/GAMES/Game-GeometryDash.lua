@@ -14,9 +14,8 @@
 
 local DIR = "/SCRIPTS/GAMES/GDASH/L"
 local SAVE = "/SCRIPTS/GAMES/gdash.dat"
-local NLEV = 8
-local INFO = "First Step|Easy|Back Beat|Easy|Pad Jumper|Normal|Orbit|Normal|"
-  .. "Flip Side|Hard|Saucer|Harder|Overdrive|Insane|Dash Demon|Demon|"
+local NLEV = 0
+local names, diffs = {}, {}
 
 local GY, CY, S, PX = 58, 10, 7, 28 -- ground y, ceiling y, cube size, screen x
 
@@ -25,20 +24,39 @@ local best, tries = {}, {}
 local state, lv, prac, P, acc, pend, lastTime, deadT, cps
 local stx, sty = 0, 0
 
-local function info(i)
-  local k = 0
-  for n, d in string.gmatch(INFO, "([^|]*)|([^|]*)|") do
-    k = k + 1
-    if k == i then return n, d end
+-- Level/song files are counted on the card (1, 2, 3, ... until one is
+-- missing, max 99). Each file's first line names it: "-- @Name|Difficulty".
+local function fileHeader(path)
+  local ok, f = pcall(io.open, path, "r")
+  if not ok or not f then return nil end
+  local ok2, s = pcall(io.read, f, 80)
+  pcall(io.close, f)
+  if not ok2 or type(s) ~= "string" then return "", "" end
+  local n, d = string.match(s, "^%-%- @([^|%c]*)|([^%c]*)")
+  return n or "", d or ""
+end
+
+local function scanLevels()
+  NLEV, names, diffs = 0, {}, {}
+  for i = 1, 99 do
+    local n, d = fileHeader(DIR .. i .. ".lua")
+    if not n then break end
+    NLEV = i
+    names[i] = (n ~= "" and n) or ("Level " .. i)
+    diffs[i] = (d ~= "" and d) or "?"
   end
-  return "?", "?"
+end
+
+local function info(i)
+  return names[i] or "?", diffs[i] or "?"
 end
 
 local function loadSave()
+  scanLevels()
   for i = 1, NLEV do best[i] = 0; tries[i] = 0 end
   local ok, f = pcall(io.open, SAVE, "r")
   if ok and f then
-    local ok2, s = pcall(io.read, f, 256)
+    local ok2, s = pcall(io.read, f, 1200)
     pcall(io.close, f)
     if ok2 and type(s) == "string" then
       local i = 0
@@ -279,6 +297,12 @@ local function run(event)
     elseif ax > -300 and ax < 300 then stx = 0 end
     if sty == 0 and (ay > 600 or ay < -600) then prac, sty = not prac, 1
     elseif ay > -300 and ay < 300 then sty = 0 end
+    if NLEV == 0 then
+      lcd.clear()
+      lcd.drawText(2, 20, "No levels found in", SMLSIZE)
+      lcd.drawText(2, 30, "/SCRIPTS/GAMES/GDASH/", SMLSIZE)
+      return 0
+    end
     lv = lv + mv
     if lv < 1 then lv = NLEV elseif lv > NLEV then lv = 1 end
     drawPick()

@@ -1,3 +1,4 @@
+-- @Saucer|Harder
 -- Geometry Dash level 6: rows bottom (ground) to top, tiles see GDASH/phys.lua
 -- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest
 return {

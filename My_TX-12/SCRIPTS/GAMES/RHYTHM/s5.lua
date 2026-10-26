@@ -1,3 +1,4 @@
+-- @Fur Elise|EXPERT
 -- Fur Elise (Beethoven), opening theme three times. EXPERT
 -- token: note+octave+length[mark]; length in units of u seconds
 -- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest

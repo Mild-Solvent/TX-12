@@ -64,11 +64,29 @@ function getDateTime() return { year = 2026, mon = 1, day = 1, hour = 12, min = 
 function run(file, seed) {
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
+  // __readfile(path) -> file contents or nil, for the io.open mock below
+  lua.lua_register(L, to_luastring("__readfile"), (L) => {
+    const p = lua.lua_tojsstring(L, 1);
+    try { lua.lua_pushstring(L, to_luastring(fs.readFileSync(p, "latin1"), true)); } catch (e) { lua.lua_pushnil(L); }
+    return 1;
+  });
   const src = prelude + `__seed = ${seed}
 
-    local io_ = io
-    io = { open = function(p, m) return nil end, read = function() return nil end,
-           write = function() end, close = function() end }
+    local GD = ${JSON.stringify(dir.replace(/\\/g, "/") + "/")}
+    local written = {}   -- files the game wrote this run, by path
+    io = {
+      open = function(p, m)
+        local real = GD .. string.gsub(p, "^/SCRIPTS/GAMES/", "")
+        if m and string.sub(m, 1, 1) == "w" then written[p] = ""; return { p = p, w = true } end
+        local data = written[p] or __readfile(real)
+        if not data then return nil end
+        return { p = p, data = data, pos = 1 }
+      end,
+      read = function(f, n) if not f.data or f.pos > #f.data then return "" end
+        local s = string.sub(f.data, f.pos, f.pos + (n or 1) - 1); f.pos = f.pos + #s; return s end,
+      write = function(f, ...) if f.w then for _, v in ipairs({...}) do written[f.p] = written[f.p] .. tostring(v) end end end,
+      close = function() end,
+    }
     local GDIR = ${JSON.stringify(dir.replace(/\\/g, "/") + "/")}
     function loadScript(p)
       local f = GDIR .. string.gsub(p, "^/SCRIPTS/GAMES/", "")

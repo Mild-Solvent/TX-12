@@ -1,3 +1,4 @@
+-- @Twinkle Twinkle|EASY
 -- Twinkle Twinkle Little Star (traditional). EASY
 -- token: note+octave+length[mark]; length in units of u seconds
 -- mark: none = tap, h = hold, s = slider, x = music only; R<n> = rest
