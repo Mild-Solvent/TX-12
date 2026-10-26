@@ -40,6 +40,7 @@ Games live in `SCRIPTS/GAMES/`; the launcher is `SCRIPTS/TOOLS/Games.lua`. To ad
 | Plinko | Right stick aims, SA/SD/ENTER drops |
 | Artillery | Menu: 1P vs AI or 2P hot-seat. Right stick: angle / power, SA/SD/ENTER fires |
 | Rhythm | Pick a song (5, Easy to Expert). Right stick aims, SA/SD taps; hold SA/SD on hold and slider notes |
+| MemTest | Not a game: ENTER/SA/SD fills Lua memory 1 KB at a time until the radio says no, then frees it and shows how many KB games really get. Also shows free RAM and frame time. Last result is kept in `SCRIPTS/GAMES/MEMTEST.txt` |
 | Snake, Pong, Breakout, Asteroids, X-Tris, Simulator | Came with the original card |
 
 More games: https://github.com/EdgeTX/lua-scripts (pick ones made for 128x64 B&W screens).
