@@ -5,7 +5,8 @@
 //   ! <u> <tune>              music: seconds per unit, then the tune tokens
 //   ~<N>                      N empty columns
 //   // ...                    comment
-//   other lines               a segment: up to 6 rows of tiles, bottom-aligned
+//   other lines               a segment: up to 20 rows of tiles, bottom-aligned (a level gets
+//                             as many rows as its tallest segment, at least 6)
 //                             (space = empty); segments are separated by blank lines
 // Output rows are run-length coded (see encodeRow) unless --plain is given.
 const fs = require("fs");
@@ -42,8 +43,9 @@ function parse(text) {
     if (!cur || !seg.length) return;
     const w = Math.max(...seg.map(s => s.length));
     const lines = seg.map(s => s.replace(/ /g, ".").padEnd(w, "."));
-    if (lines.length > 6) throw new Error("segment >6 rows in level " + cur.n);
-    for (let r = 0; r < 6; r++) { const li = lines.length - 1 - r; cur.rows[r] += li >= 0 ? lines[li] : ".".repeat(w); }
+    if (lines.length > 20) throw new Error("segment >20 rows in level " + cur.n);
+    while (cur.rows.length < lines.length) cur.rows.push(".".repeat(cur.rows[0].length));
+    for (let r = 0; r < cur.rows.length; r++) { const li = lines.length - 1 - r; cur.rows[r] += li >= 0 ? lines[li] : ".".repeat(w); }
     seg = [];
   }
   for (const l of src) {
@@ -56,7 +58,7 @@ function parse(text) {
       levels[cur.n] = cur; continue;
     }
     if (l.startsWith("! ")) { const p = l.slice(2).split(" "); cur.u = p[0]; cur.m = p.slice(1).join(" "); continue; }
-    if (l.startsWith("~")) { flush(); const n = +l.slice(1); for (let r = 0; r < 6; r++) cur.rows[r] += ".".repeat(n); continue; }
+    if (l.startsWith("~")) { flush(); const n = +l.slice(1); for (let r = 0; r < cur.rows.length; r++) cur.rows[r] += ".".repeat(n); continue; }
     if (l.trim() === "") { flush(); continue; }
     seg.push(l);
   }
@@ -66,10 +68,10 @@ function parse(text) {
 
 function luaStr(s) { return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'; }
 
-// level {n, name, diff, rows[6] plain, u, m} -> file text (same layout as the editor's export)
+// level {n, name, diff, rows[6..20] plain, u, m} -> file text (same layout as the editor's export)
 function levelFile(lv, plain) {
   const len = Math.max(...lv.rows.map(r => r.length));
-  // row 1 keeps its full length (it fixes where the level ends), rows 2-6 lose trailing dots
+  // row 1 keeps its full length (it fixes where the level ends), the others lose trailing dots
   const rows = lv.rows.map((r, i) => i === 0 ? r.padEnd(len, ".") : r.replace(/\.+$/, ""));
   const enc = rows.map(r => plain ? r : encodeRow(r));
   return "-- @" + (lv.name || ("Level " + lv.n)) + "|" + (lv.diff || "?") + "\n" +
@@ -94,6 +96,6 @@ if (require.main === module) {
     fs.writeFileSync(out + "/L" + k + ".lua", s);
     const len = Math.max(...lv.rows.map(r => r.length));
     console.log("L" + k, "cols", len, "bytes", s.length);
-    for (let r = 5; r >= 0; r--) console.log("  " + lv.rows[r]);
+    for (let r = lv.rows.length - 1; r >= 0; r--) console.log("  " + lv.rows[r]);
   }
 }

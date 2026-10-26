@@ -18,7 +18,7 @@ local GD = "/SCRIPTS/GAMES/GDASH/"
 local KEYS = "x y vy g m mi du spd pc buf gr orb pad rt da y2 vy2 g2 gr2 buf2 orb2 pad2 rt2 da2"
 local NLEV = 0
 local best, tries = {}, {}
-local tile, step, music, endX, newP, draw, pick, mt
+local tile, step, music, endX, newP, nr, draw, pick, mt
 local state, lv, prac, P, acc, pend, lastTime, deadT, cps, msg
 
 local function save()
@@ -50,12 +50,12 @@ local function loadLevel(i)
   if type(rows) ~= "table" then rows = {} end
   c = loadScript(GD .. "phys.lua")
   c = c and c()
-  if c then tile, step, music, endX, newP = c(rows) end
+  if c then tile, step, music, endX, newP, nr = c(rows) end
   rows, c = nil, nil
   collectgarbage()
   c = loadScript(GD .. "draw.lua")
   c = c and c()
-  if c and tile then draw = c(tile, endX) end
+  if c and tile then draw = c(tile, endX, nr) end
   c = nil
   collectgarbage()
 end

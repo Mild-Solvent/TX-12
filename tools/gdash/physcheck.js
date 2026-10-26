@@ -138,6 +138,47 @@ const Z = n => "0".repeat(n), O = n => "1".repeat(n);
   const s = both(flat([[0, at(0, "0")]]), Z(3), 3);
   check("speed 0 = 50 px/s", Math.abs(s[2].x - 3) < 1e-9);
 }
+// slopes: ride up onto a block without a hop, down again, launch off a lone ramp
+{
+  const s = both(flat([[0, at(5, "/") + "#####`"]]), Z(150), 150);
+  const top = Math.min(...s.map(q => q.y));
+  check("slope up onto a block: no hop", !s[s.length - 1].dead && top === 43 && s.filter(q => q.y === 43).length > 20, "highest y " + top);
+  check("slope down back to the ground", s[s.length - 1].y === 51 && s.slice(70, 85).every(q => q.gr === 1), "y " + s[s.length - 1].y);
+  const l = both(flat([[0, at(5, "/")]]), Z(60), 60);
+  const lt = Math.min(...l.map(q => q.y));
+  check("lone up slope launches into the air", !l[l.length - 1].dead && lt < 41, "highest y " + lt.toFixed(1));
+  const w = both(flat([[0, at(5, "`")]]), Z(40), 40);
+  check("running into a down slope's high side kills", w[w.length - 1].dead === 1, "x " + w[w.length - 1].x.toFixed(1));
+  const g = both(flat([[0, at(5, "()##][")]]), Z(150), 150);
+  check("gentle ramp up and down", !g[g.length - 1].dead && Math.min(...g.map(q => q.y)) === 43, "highest y " + Math.min(...g.map(q => q.y)));
+  const t = both(flat([[0, at(5, "/#####")], [1, at(6, "/####")]]), Z(150), 150);
+  check("two-row ramp onto a block row 2", !t[t.length - 1].dead && Math.min(...t.map(q => q.y)) === 35, "highest y " + Math.min(...t.map(q => q.y)));
+  const j = both(flat([[0, at(5, "/##########")]]), Z(23) + "1" + Z(40), 64);
+  check("jump from a slope", j[23].vy < -150 && Math.min(...j.map(q => q.y)) < 30 && !j[j.length - 1].dead, "highest y " + Math.min(...j.map(q => q.y)).toFixed(1));
+  const u = both(flat([[0, at(1, "G")], [5, at(5, "/////")]]), Z(60), 60);
+  check("flipped gravity runs under a slope's flat bottom", !u[u.length - 1].dead && u.slice(40).every(q => q.y === 10), "y " + u[u.length - 1].y);
+}
+// taller levels: 10 rows, ceiling at 58 - 80 = -22
+{
+  const tall = [".".repeat(60), "", "", "", "", "", "", "", "", ""];
+  const s = both([at(1, "S").padEnd(60, ".")].concat(tall.slice(1)), O(80), 80);
+  check("10-row level: ship flies up to the higher ceiling", s[79].y === -22, "y " + s[79].y);
+  const b = both([".".repeat(60), "", "", "", "", "", "", "", "", "#".repeat(30)], "1" + Z(5), 6);
+  check("10-row level: blocks on row 10 are solid", b.length === 6 && b[5].y < 51);
+  const res = luaDo(`
+local d = DRAW(function() return 46 end, 1000, 10)
+local P = { x = 100, y = -15, vy = 0, g = 1, m = 2, mi = false, gr = false, du = false }
+local ys = {}
+for k = 1, 12 do LINES = {}; d(P, nil, false, "", 0, 1) end
+local lo, hi = 99, -99
+for _, l in ipairs(LINES) do
+  local a, b, c, e = string.match(l, "(%-?%d+),(%-?%d+),(%-?%d+),(%-?%d+)")
+  if tonumber(a) >= 28 and tonumber(c) <= 34 then lo = math.min(lo, tonumber(b), tonumber(e)); hi = math.max(hi, tonumber(b), tonumber(e)) end
+end
+OUT = lo .. " " .. hi`);
+  const [lo, hi] = res.trim().split(" ").map(Number);
+  check("10-row level: camera scrolls up with the icon (draw.lua)", lo >= 10 && hi <= 56, "icon drawn at screen y " + lo + ".." + hi);
+}
 // every icon is mirrored upside down under flipped gravity (draw.lua)
 {
   const res = luaDo(`

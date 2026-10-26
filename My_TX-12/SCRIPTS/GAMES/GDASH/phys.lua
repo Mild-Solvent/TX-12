@@ -1,11 +1,15 @@
 -- Geometry Dash physics, one fixed 20 ms step. Loaded only while playing:
---   tile, step, music, endX, newPlayer = loadScript(this)()(levelTable)
+--   tile, step, music, endX, newPlayer, rows = loadScript(this)()(levelTable)
 --   step(p, press, hold): press = new press this step (SA/SD down-edge or ENTER),
 --                         hold = SA/SD held this step (a press counts as held)
 -- editors/geodash-editor.html has a line-by-line JavaScript copy: change both.
 --
 -- TILES (one byte per cell, rows bottom to top, "." = empty)
 --  #  block (solid 8x8)          =  slab (solid top half)
+--  slopes, solid under the diagonal; the icon slides along them (normal gravity),
+--  their high side kills like a block side, their flat bottom is a ceiling:
+--  /  45 deg up     `  45 deg down    ( )  gentle up, low then high half
+--  [ ]  gentle down, high then low half
 --  ^  spike                      v  hanging spike
 --  orbs, press while touching (reach 4 px around the icon), each once per touch:
 --  o  yellow: jump 180           i  pink: small jump 140      r  red: big jump 230
@@ -19,10 +23,11 @@
 --  0 1 2 3 4  speed 50 70 90 110 130 px/s
 --  T  teleport: icon jumps to the row of the "t" in the same column
 --  t  teleport exit (marker only)
--- Flying modes (ufo, ship, wave, swing) use the whole 6-row field: ground to ceiling.
+-- A level has 6 to 20 rows (6 = one screen; draw.lua scrolls taller ones).
+-- Flying modes (ufo, ship, wave, swing) use the whole field: ground to ceiling.
 -- Level rows may be run-length coded: "c*N" = char c repeated byte(N)-32 times
 -- (plain rows load too); they stay coded in memory, see window() below.
-local GY, CY, DT, BUF = 58, 10, 0.02, 0.12
+local GY, DT, BUF = 58, 0.02, 0.12
 local GC, JV, PADV = 800, 180, 250  -- cube/robot/spider gravity, jump, yellow pad
 local GU, UV = 520, 135             -- ufo gravity, flap
 local SHU, SHD, FM = 700, 600, 150  -- ship accel held/released, ship+swing max speed
@@ -32,12 +37,16 @@ local SWG = 600                     -- swing gravity
 local NOTES = "C C#D D#E F F#G G#A A#B "
 
 return function(lv)
+-- N rows, ceiling CY (world y, negative for levels taller than one screen)
+local N = 6
+while N < 20 and type(lv[N + 1]) == "string" do N = N + 1 end
+local CY = GY - 8 * N
 -- Rows stay run-length coded in memory, so a long level costs only its file
--- size; a window of 128 columns per row is decoded when needed. For row r:
--- W[r] coded row, W[r+6] decoded window, W[r+12] its first column,
--- W[r+18] / W[r+24] scan cursor: byte position of a token that starts at that column.
+-- size; a window of 64 columns per row is decoded when needed. For row r:
+-- W[r] coded row, W[r+N] decoded window, W[r+2N] its first column,
+-- W[r+3N] / W[r+4N] scan cursor: byte position of a token that starts at that column.
 local W, len = {}, 0
-for r = 1, 6 do
+for r = 1, N do
   local s, n, p = lv[r], 0, 1
   if type(s) ~= "string" then s = "" end
   for it = 1, #s do
@@ -45,42 +54,42 @@ for r = 1, 6 do
     if string.byte(s, p + 1) == 42 then n, p = n + (string.byte(s, p + 2) or 33) - 32, p + 3
     else n, p = n + 1, p + 1 end
   end
-  W[r], W[r + 6], W[r + 12], W[r + 18], W[r + 24], lv[r] = s, "", -999, 1, 0, nil
+  W[r], W[r + N], W[r + 2 * N], W[r + 3 * N], W[r + 4 * N], lv[r] = s, "", -999, 1, 0, nil
   if n > len then len = n end
 end
 local endX = len * 8 + 16
 
 local function window(r, w)
   if w < 0 then w = 0 end
-  local e = W[r]
-  if w < W[r + 24] then W[r + 18], W[r + 24] = 1, 0 end
-  local pos, col, p1, c1 = W[r + 18], W[r + 24], nil, 0
+  local e, a, b = W[r], r + 3 * N, r + 4 * N
+  if w < W[b] then W[a], W[b] = 1, 0 end
+  local pos, col, p1, c1 = W[a], W[b], nil, 0
   for it = 1, #e do
-    if not string.byte(e, pos) or col >= w + 128 then break end
+    if not string.byte(e, pos) or col >= w + 64 then break end
     local n, np = 1, pos + 1
     if string.byte(e, np) == 42 then n, np = (string.byte(e, np + 1) or 33) - 32, np + 2 end
-    if col + n <= w then W[r + 18], W[r + 24] = np, col + n
+    if col + n <= w then W[a], W[b] = np, col + n
     elseif not p1 then p1, c1 = pos, col end
     pos, col = np, col + n
   end
-  W[r + 6], W[r + 12] = "", w
+  W[r + N], W[r + 2 * N] = "", w
   if p1 then
     local s = string.gsub(string.sub(e, p1, pos - 1), "(.)%*(.)", function(c, k) return string.rep(c, string.byte(k) - 32) end)
-    W[r + 6] = string.sub(s, w - c1 + 1, w - c1 + 128)
+    W[r + N] = string.sub(s, w - c1 + 1, w - c1 + 64)
   end
 end
 
 local function tile(c, r)
-  if c < 0 or r < 0 or r > 5 then return 46 end
+  if c < 0 or r < 0 or r >= N then return 46 end
   r = r + 1
-  local i = c - W[r + 12]
-  if i < 0 or i >= 128 then window(r, c - 20); i = c - W[r + 12] end
-  return string.byte(W[r + 6], i + 1) or 46
+  local i = c - W[r + 2 * N]
+  if i < 0 or i >= 64 then window(r, c - 20); i = c - W[r + 2 * N] end
+  return string.byte(W[r + N], i + 1) or 46
 end
 local function rowTop(r) return GY - 8 * r - 8 end
 local function rowOf(y)
   local r = math.floor((GY - 1 - y) / 8)
-  if r < 0 then r = 0 elseif r > 5 then r = 5 end
+  if r < 0 then r = 0 elseif r >= N then r = N - 1 end
   return r
 end
 -- solid part of a tile: "#" block, "=" slab (top half)
@@ -88,6 +97,13 @@ local function solid(t, r)
   local top = rowTop(r)
   if t == 35 then return top, top + 8 end
   if t == 61 then return top, top + 4 end
+  return nil
+end
+-- slope surface: height above the tile's bottom at x offset l (0..8), and its gradient
+local function slope(t, l)
+  if t == 47 then return l, 1 elseif t == 96 then return 8 - l, -1
+  elseif t == 40 then return l / 2, 0.5 elseif t == 41 then return 4 + l / 2, 0.5
+  elseif t == 91 then return 8 - l / 2, -0.5 elseif t == 93 then return 4 - l / 2, -0.5 end
   return nil
 end
 local function hit(ax, ay, aw, ah, bx, by, bw, bh)
@@ -115,7 +131,7 @@ local function spider(p, s)
   local ny = CY
   if g < 0 then ny = GY - s end
   for c = c0, c1 do
-    for r = 0, 5 do
+    for r = 0, N - 1 do
       local top, bot = solid(tile(c, r), r)
       if top then
         if g > 0 and bot <= p.y + 1 and bot > ny then ny = bot
@@ -128,7 +144,7 @@ end
 
 local function portals(p, cc)
   local tp, er = false, nil
-  for r = 0, 5 do
+  for r = 0, N - 1 do
     local t = tile(cc, r)
     if t == 71 or t == 103 then
       p.g = 1
@@ -222,7 +238,7 @@ end
 
 -- speed, movement, landing, death (after x has moved)
 local function post(p, hold)
-  local s, m, g, k = size(p), p.m, p.g, 1
+  local s, m, g, k, wg = size(p), p.m, p.g, 1, p.gr
   if p.mi then k = 0.8 end
   if p.da and not hold then p.da = false end
   if p.da then p.vy = 0
@@ -253,16 +269,47 @@ local function post(p, hold)
   local r0, r1 = rowOf(p.y + s - 1), rowOf(p.y - 1)
   for c = c0, c1 do
     for r = r0, r1 do
-      local top, bot = solid(tile(c, r), r)
+      local t = tile(c, r)
+      local top, bot = solid(t, r)
+      local sl = slope(t, 0)
+      if sl then top, bot = rowTop(r), rowTop(r) + 8 end  -- only its flat bottom counts here
       if top and p.y < bot and p.y + s > top then
         if p.vy * g >= 0 then
-          if g > 0 and py + s <= top + 3 then p.y = top - s; p.vy = 0; p.gr = true
+          if g > 0 and not sl and py + s <= top + 3 then p.y = top - s; p.vy = 0; p.gr = true
           elseif g < 0 and py >= bot - 3 then p.y = bot; p.vy = 0; p.gr = true end
         else
           if g > 0 and py >= bot - 3 then p.y = bot; p.vy = 0
-          elseif g < 0 and py + s <= top + 3 then p.y = top - s; p.vy = 0 end
+          elseif g < 0 and not sl and py + s <= top + 3 then p.y = top - s; p.vy = 0 end
         end
       end
+    end
+  end
+  -- slopes (normal gravity): stand on the highest point of the diagonal under the
+  -- feet, stick to it going down, leave an up slope into the air with its rise speed
+  -- (not onto a block or another slope), crash into a high side
+  if g > 0 then
+    local fy, x0, x1, sy, gd, nt = p.y + s, p.x + 1, p.x + s - 1, nil, 0, 46
+    for c = math.floor(x0 / 8), math.floor(x1 / 8) do
+      for r = rowOf(fy + 3), rowOf(fy - 9) do
+        local t = tile(c, r)
+        local h, d = slope(t, 0)
+        if h and p.y < rowTop(r) + 8 then
+          local l = x0 - c * 8
+          if d > 0 then l = x1 - c * 8 end
+          if l < 0 then l = 0 elseif l > 8 then l = 8 end
+          h = slope(t, l)
+          h = rowTop(r) + 8 - h
+          if not sy or h < sy then sy, gd, nt = h, d, tile(c + 1, r) end
+        end
+      end
+    end
+    if sy and (p.vy >= 0 or p.vy >= -p.spd * gd) then  -- not when rising faster than the slope (a jump)
+      local st = 0
+      if wg and p.vy >= 0 then st = 3 end
+      if fy >= sy - st and py + s <= sy + 3 + p.spd * DT then
+        if gd > 0 and (nt == 35 or nt == 61 or slope(nt, 0)) then gd = 0 end
+        p.y, p.vy, p.gr = sy - s, -p.spd * gd, true
+      elseif fy > sy + 3 then p.dead = true; return end
     end
   end
   if p.y + s >= GY then
@@ -336,5 +383,5 @@ local function music(t)
   end
 end
 
-return tile, step, music, endX, newPlayer
+return tile, step, music, endX, newPlayer, N
 end

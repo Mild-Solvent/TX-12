@@ -43,7 +43,7 @@ So adding a level or song **never needs a change to the game**. Two rules:
 
 ### Tiles
 
-One character per 8x8 cell, 6 rows. The same table is at the top of `GDASH/phys.lua`, in
+One character per 8x8 cell, 6 to 20 rows (6 = one radio screen; taller levels scroll up and down). The same table is at the top of `GDASH/phys.lua`, in
 `tools/gdash/levels.txt` and in the editor's **Help** tab (with all the numbers).
 
 | Char | Tile | Char | Tile |
@@ -64,13 +64,16 @@ One character per 8x8 cell, 6 rows. The same table is at the top of `GDASH/phys.
 | `G` / `g` | gravity up / down | `m` / `n` | mini / normal size |
 | `D` / `d` | dual / single | `T` | teleport: to the row of the `t` in the same column |
 | `t` | teleport exit | `0`-`4` | speed 50 / 70 / 90 / 110 / 130 px/s |
+| `/` | slope up 45° | `` ` `` | slope down 45° |
+| `(` `)` | gentle slope up (low, then high half) | `[` `]` | gentle slope down (high, then low half) |
 
 Portals act on the whole column (any row) when the icon's centre enters it; several can share a column
-(`D` + `W` = dual wave). Flying modes (UFO, ship, wave, swing) use the whole 6-row field as their corridor.
+(`D` + `W` = dual wave). Flying modes (UFO, ship, wave, swing) use the whole field, ground to the top row, as their corridor.
+Slopes are solid under the diagonal: the icon slides along them and dies running into a high side.
 
 ### File format
 
-`L<n>.lua` returns `{ "row1", ..., "row6", u = <seconds per note unit>, m = "<tune>" }`, ground row first, with
+`L<n>.lua` returns `{ "row1", ..., "row6" (up to "row20"), u = <seconds per note unit>, m = "<tune>" }`, ground row first, with
 `-- @Name|Difficulty` as its first line. Rows are **run-length coded**: a run of 4 or more equal tiles is written
 `c*N`, where `N` is a single character whose code minus 32 is the count (`.*D` = 36 dots, `^*$` = 4 spikes;
 at most 94 per run). The game keeps the rows coded in memory and decodes only the columns around the icon, so a level costs about its file size in radio RAM. Plain rows (the old format) still load,

@@ -92,6 +92,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
   <span><label>Difficulty </label><input id="fDiff" list="diffs" maxlength="20" size="8"></span>
   <datalist id="diffs"><option>Easy</option><option>Normal</option><option>Hard</option><option>Harder</option><option>Insane</option><option>Demon</option></datalist>
   <span><label>Length </label><input id="fW" type="number" min="1" max="4000"> <label>columns</label></span>
+  <span title="6 rows = one radio screen. Taller levels (up to 20 rows) scroll up and down on the radio."><label>Height </label><input id="fH" type="number" min="6" max="20"> <label>rows</label></span>
   <span id="stats"></span>
 </div>
 
@@ -236,7 +237,9 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
       <div id="helptiles"></div>
       <h3>How a level file works</h3>
       <ul>
-        <li>6 strings, bottom (ground) row first. Column <i>c</i> is 8 px wide; the cube (7&times;7) starts at x = 0 on the ground at speed 2 (90 px/s), cube mode, normal gravity.</li>
+        <li>6 to 20 strings, bottom (ground) row first. Column <i>c</i> is 8 px wide; the cube (7&times;7) starts at x = 0 on the ground at speed 2 (90 px/s), cube mode, normal gravity.</li>
+        <li><b>Taller levels:</b> 6 rows fill one radio screen. Set <i>Height</i> up to 20 rows and the radio's camera scrolls up and down to follow the icon (the editor shows a dashed line where the first screen ends). The game counts the rows, so every row is written, even empty ones. One real Geometry Dash block = one tile: speed 2 (90 px/s, 11 tiles/s) is close to the real normal speed, so real levels keep their length and height.</li>
+        <li><b>Slopes</b> (<code>/</code> <code>`</code> <code>(</code><code>)</code> <code>[</code><code>]</code>): solid under the diagonal. With normal gravity the icon slides along them, leaves an up slope into the air with its climb speed, and dies running into a high side (a <code>`</code> seen from the left, a lone <code>)</code> or <code>[</code>). With flipped gravity only their flat bottom counts, like a block's.</li>
         <li>The level ends at x = (longest row length) &times; 8 + 16, so trailing empty columns in row 1 make the level longer. The editor keeps row 1 full length and trims the other rows, like <code>tools/gdash/build.js</code>.</li>
         <li>Portals act on the whole column: when the icon's centre enters the column, every portal in it fires once, whatever its row. You may stack several portals in one column (e.g. <code>D</code> + <code>W</code> = dual wave, <code>U</code> + <code>G</code> = upside-down UFO).</li>
         <li><b>Compact rows:</b> a run of 4 or more equal tiles is written <code>c*N</code>, where <code>N</code> is one character whose code minus 32 is the count (<code>.*D</code> = 36 dots). The game keeps the rows coded in memory and decodes only the 128 columns around the icon, so a long level costs about its file size in RAM. Old files with plain rows still load; tick <i>plain rows</i> on the Export tab to write them plain.</li>
@@ -270,7 +273,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
         <tr><td>swing <code>Z</code></td><td>every press flips gravity, also in the air</td><td>gravity 600, max 150 px/s</td></tr>
       </table>
       <p>Mini (<code>m</code>): 5&times;5 icon, jumps/orbs/pads x0.8, ship and swing accelerate x1.25, wave twice as steep. Every icon is drawn upside down with flipped gravity.
-      <b>Flying modes</b> (ufo, ship, wave, swing) use the whole 6-row field as their corridor: the ceiling line turns solid while you fly. Make a narrower corridor with blocks.
+      <b>Flying modes</b> (ufo, ship, wave, swing) use the whole field (all rows) as their corridor: the ceiling line turns solid while you fly. Make a narrower corridor with blocks.
       Speeds: 0 = 50, 1 = 70, 2 = 90, 3 = 110, 4 = 130 px/s.</p>
       <p><b>Radio timing:</b> SA/SD are read once per frame (20-80 ms), so a hold is as exact as one frame and a "tap" may last a whole frame (robot: a tap on a slow 80 ms frame jumps ~20 px, not 12). ENTER is a tap only: it cannot hold a ship, wave or dash orb.</p>
     </div>
@@ -311,6 +314,12 @@ var GD = (function () {
     { ch: "=", cat: "Basic", name: "Slab", desc: "Solid top half (8x4) of the cell. Land on it or under it; its side kills." },
     { ch: "^", cat: "Basic", name: "Spike", desc: "Kills. Hitbox 4x5 px at the bottom centre of the cell." },
     { ch: "v", cat: "Basic", name: "Hanging spike", desc: "Kills. Hitbox 4x5 px at the top centre of the cell." },
+    { ch: "/", cat: "Slopes", name: "Slope up 45°", desc: "Solid under the diagonal. The icon slides up it (normal gravity) and is launched off the top into the air with its climb speed; onto a block or another slope it carries on smoothly. Its flat bottom is a ceiling." },
+    { ch: "`", cat: "Slopes", name: "Slope down 45°", desc: "Solid under the diagonal, going down. Running into its high (left) side kills, like a block side." },
+    { ch: "(", cat: "Slopes", name: "Gentle up, low half", desc: "First half of a gentle (22.5°) ramp: rises 0 to 4 px. Put a ) after it." },
+    { ch: ")", cat: "Slopes", name: "Gentle up, high half", desc: "Second half of a gentle ramp: rises 4 to 8 px. Its 4 px left side kills unless a ( is in front of it." },
+    { ch: "[", cat: "Slopes", name: "Gentle down, high half", desc: "First half of a gentle down ramp: 8 to 4 px. Put a ] after it. Its high side kills." },
+    { ch: "]", cat: "Slopes", name: "Gentle down, low half", desc: "Second half of a gentle down ramp: 4 to 0 px." },
     { ch: "o", cat: "Orbs", name: "Yellow orb", desc: "Press while touching it (reach 4 px around the icon): jump at 180 px/s, also in the air. Each orb works once per touch." },
     { ch: "i", cat: "Orbs", name: "Pink orb", desc: "Press while touching: small jump (140 px/s)." },
     { ch: "r", cat: "Orbs", name: "Red orb", desc: "Press while touching: big jump (230 px/s)." },
@@ -455,12 +464,14 @@ var GD = (function () {
       pos[idx++] = value();
     }
     var rows = [], compact = false;
-    for (var r = 1; r <= 6; r++) {
+    var nr = 6;
+    while (nr < 20 && pos[nr + 1] && pos[nr + 1].t === "str") nr++;
+    for (var r = 1; r <= nr; r++) {
       var v = pos[r];
       if (v && v.t === "str") { if (/\*/.test(v.v)) compact = true; rows.push(decodeRow(v.v)); }
       else { rows.push(""); if (v && !(v.t === "id" && v.v === "nil")) warnings.push("row " + r + " is not a string, treated as empty"); }
     }
-    for (var e in pos) if (+e > 6) warnings.push("extra value #" + e + " ignored (the game reads 6 rows)");
+    for (var e in pos) if (+e > nr) warnings.push("extra value #" + e + " ignored (the game reads " + nr + " rows: up to 20 strings in a row)");
     var u = null, mel = null;
     if (named.u) {
       if (named.u.t === "num") u = named.u.raw;
@@ -498,11 +509,12 @@ var GD = (function () {
   }
 
   // Level -> L<n>.lua text, same layout as tools/gdash/build.js levelFile().
-  // Row 1 keeps its full length (that fixes where the level ends), rows 2-6
-  // lose trailing dots. Rows are run-length coded unless opts.plain.
+  // Row 1 keeps its full length (that fixes where the level ends), the other rows
+  // lose trailing dots. 6 to 20 rows (all written, even empty ones: the game counts
+  // them). Rows are run-length coded unless opts.plain.
   function exportLevel(lv, opts) {
-    var plain = !!(opts && opts.plain), rows = [], W = 0, r;
-    for (r = 0; r < 6; r++) { var s = lv.rows[r] || ""; rows.push(s); if (s.length > W) W = s.length; }
+    var plain = !!(opts && opts.plain), rows = [], W = 0, r, NR = Math.max(6, Math.min(20, lv.rows.length));
+    for (r = 0; r < NR; r++) { var s = lv.rows[r] || ""; rows.push(s); if (s.length > W) W = s.length; }
     var outRows = rows.map(function (s, i) {
       if (i === 0) { while (s.length < W) s += "."; } else s = s.replace(/\.+$/, "");
       return plain ? s : encodeRow(s);
@@ -550,15 +562,17 @@ var GD = (function () {
   // Physics: line-by-line port of GDASH/phys.lua. step(p, press, hold).
   // ------------------------------------------------------------------
   function rowTop(r) { return GY - 8 * r - 8; }
-  function rowOf(y) {
-    var r = Math.floor((GY - 1 - y) / 8);
-    if (r < 0) r = 0; else if (r > 5) r = 5;
-    return r;
-  }
   function solid(t, r) {
     var top = rowTop(r);
     if (t === 35) return [top, top + 8];
     if (t === 61) return [top, top + 4];
+    return null;
+  }
+  // slope surface: [height above the tile's bottom at x offset l (0..8), gradient] or null
+  function slope(t, l) {
+    if (t === 47) return [l, 1]; if (t === 96) return [8 - l, -1];
+    if (t === 40) return [l / 2, 0.5]; if (t === 41) return [4 + l / 2, 0.5];
+    if (t === 91) return [8 - l / 2, -0.5]; if (t === 93) return [4 - l / 2, -0.5];
     return null;
   }
   function hit(ax, ay, aw, ah, bx, by, bw, bh) {
@@ -575,16 +589,23 @@ var GD = (function () {
   var SWAP = ["y", "y2", "vy", "vy2", "g", "g2", "gr", "gr2", "buf", "buf2", "orb", "orb2", "pad", "pad2", "rt", "rt2", "da", "da2"];
   function swap(p) { for (var i = 0; i < SWAP.length; i += 2) { var a = SWAP[i], b = SWAP[i + 1], t = p[a]; p[a] = p[b]; p[b] = t; } }
 
-  // rows: array of up to 6 strings (index 0 = ground row), plain or compact
+  // rows: array of 6 to 20 strings (index 0 = ground row), plain or compact
   function makeLevel(rows) {
-    var R = [], len = 0;
-    for (var i = 0; i < 6; i++) {
+    var R = [], len = 0, N = 6;
+    while (N < 20 && rows && typeof rows[N] === "string") N++;
+    var CY = GY - 8 * N;
+    for (var i = 0; i < N; i++) {
       var s = rows && typeof rows[i] === "string" ? decodeRow(rows[i]) : "";
       R.push(s); if (s.length > len) len = s.length;
     }
     var endX = len * 8 + 16;
+    function rowOf(y) {
+      var r = Math.floor((GY - 1 - y) / 8);
+      if (r < 0) r = 0; else if (r >= N) r = N - 1;
+      return r;
+    }
     function tile(c, r) {
-      if (c < 0 || r < 0 || r > 5) return 46;
+      if (c < 0 || r < 0 || r >= N) return 46;
       var s = R[r];
       if (c >= s.length) return 46;
       return s.charCodeAt(c) & 255;
@@ -594,7 +615,7 @@ var GD = (function () {
       var ny = CY;
       if (g < 0) ny = GY - s;
       for (var c = c0; c <= c1; c++) {
-        for (var r = 0; r <= 5; r++) {
+        for (var r = 0; r < N; r++) {
           var sb = solid(tile(c, r), r);
           if (sb) {
             var top = sb[0], bot = sb[1];
@@ -607,7 +628,7 @@ var GD = (function () {
     }
     function portals(p, cc) {
       var tp = false, er = null;
-      for (var r = 0; r <= 5; r++) {
+      for (var r = 0; r < N; r++) {
         var t = tile(cc, r);
         if (t === 71 || t === 103) {
           p.g = 1;
@@ -698,7 +719,7 @@ var GD = (function () {
       }
     }
     function post(p, hold) {
-      var s = size(p), m = p.m, g = p.g, k = 1, c, r, c0, c1, r0, r1, sb;
+      var s = size(p), m = p.m, g = p.g, k = 1, c, r, c0, c1, r0, r1, sb, wg = p.gr;
       if (p.mi) k = 0.8;
       if (p.da && !hold) p.da = false;
       if (p.da) p.vy = 0;
@@ -728,19 +749,45 @@ var GD = (function () {
       r0 = rowOf(p.y + s - 1); r1 = rowOf(p.y - 1);
       for (c = c0; c <= c1; c++) {
         for (r = r0; r <= r1; r++) {
-          sb = solid(tile(c, r), r);
+          var t0 = tile(c, r), sl = slope(t0, 0);
+          sb = solid(t0, r);
+          if (sl) sb = [rowTop(r), rowTop(r) + 8];  // only its flat bottom counts here
           if (sb) {
             var top = sb[0], bot = sb[1];
             if (p.y < bot && p.y + s > top) {
               if (p.vy * g >= 0) {
-                if (g > 0 && py + s <= top + 3) { p.y = top - s; p.vy = 0; p.gr = true; }
+                if (g > 0 && !sl && py + s <= top + 3) { p.y = top - s; p.vy = 0; p.gr = true; }
                 else if (g < 0 && py >= bot - 3) { p.y = bot; p.vy = 0; p.gr = true; }
               } else {
                 if (g > 0 && py >= bot - 3) { p.y = bot; p.vy = 0; }
-                else if (g < 0 && py + s <= top + 3) { p.y = top - s; p.vy = 0; }
+                else if (g < 0 && !sl && py + s <= top + 3) { p.y = top - s; p.vy = 0; }
               }
             }
           }
+        }
+      }
+      // slopes (normal gravity), see phys.lua
+      if (g > 0) {
+        var fy = p.y + s, x0 = p.x + 1, x1 = p.x + s - 1, sy = null, gd = 0, nt = 46;
+        for (c = Math.floor(x0 / 8); c <= Math.floor(x1 / 8); c++) {
+          for (r = rowOf(fy + 3); r <= rowOf(fy - 9); r++) {
+            var t1 = tile(c, r), hd = slope(t1, 0);
+            if (hd && p.y < rowTop(r) + 8) {
+              var l = x0 - c * 8;
+              if (hd[1] > 0) l = x1 - c * 8;
+              if (l < 0) l = 0; else if (l > 8) l = 8;
+              var h = rowTop(r) + 8 - slope(t1, l)[0];
+              if (sy === null || h < sy) { sy = h; gd = hd[1]; nt = tile(c + 1, r); }
+            }
+          }
+        }
+        if (sy !== null && (p.vy >= 0 || p.vy >= -p.spd * gd)) {  // not when rising faster than the slope (a jump)
+          var st = 0;
+          if (wg && p.vy >= 0) st = 3;
+          if (fy >= sy - st && py + s <= sy + 3 + p.spd * DT) {
+            if (gd > 0 && (nt === 35 || nt === 61 || slope(nt, 0))) gd = 0;
+            p.y = sy - s; p.vy = -p.spd * gd; p.gr = true;
+          } else if (fy > sy + 3) { p.dead = true; return; }
         }
       }
       if (p.y + s >= GY) {
@@ -782,7 +829,7 @@ var GD = (function () {
       if (p.du && !p.dead) { swap(p); post(p, hold); swap(p); }
       if (p.x >= endX && !p.dead) p.won = true;
     }
-    return { tile: tile, step: step, endX: endX, len: len, rows: R, newPlayer: newPlayer };
+    return { tile: tile, step: step, endX: endX, len: len, rows: R, N: N, CY: CY, newPlayer: newPlayer };
   }
 
   // ------------------------------------------------------------------
@@ -850,7 +897,7 @@ var GD = (function () {
     var L = makeLevel(rows), x = 0, spd = 90, steps = 0, used = { 90: true };
     while (x < L.endX && steps < 500000) {
       var cc = Math.floor((x + 3) / 8);
-      for (var r = 0; r <= 5; r++) {
+      for (var r = 0; r < L.N; r++) {
         var t = L.tile(cc, r);
         if (t >= 48 && t <= 52) { spd = 50 + 20 * (t - 48); used[spd] = true; }
       }
@@ -888,7 +935,7 @@ var GD = (function () {
       if (p.pad !== o[1]) use(p.pad);
       if (p.du && p.orb2 !== o[2]) use(p.orb2);
       if (p.du && p.pad2 !== o[3]) use(p.pad2);
-      if (p.pc !== o[4]) for (var r = 0; r < 6; r++) { var ch = String.fromCharCode(L.tile(p.pc, r)); if (PORTAL_CHARS.indexOf(ch) >= 0) used[ch] = (used[ch] || 0) + 1; }
+      if (p.pc !== o[4]) for (var r = 0; r < L.N; r++) { var ch = String.fromCharCode(L.tile(p.pc, r)); if (PORTAL_CHARS.indexOf(ch) >= 0) used[ch] = (used[ch] || 0) + 1; }
       if (p.da || p.da2) used.dash = (used.dash || 0) + 1;
       trace.push([p.x, p.y]);
       full.push([p.x, p.y, p.vy, p.g, p.m, p.mi ? 1 : 0, p.du ? 1 : 0, p.y2, p.dead ? 1 : 0, p.won ? 1 : 0]);
@@ -1108,10 +1155,11 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     "?": "110001010000010", "#": "101111101111101", " ": "000000000000000",
     m: "000111111101101", n: "000110101101101", d: "001001011101011", t: "010111010010011", "=": "000111000111000", "^": "010101000000000", "~": "000011110000000"
   };
-  function Lcd(w, h) { this.w = w; this.h = h; this.px = new Uint8Array(w * h); }
+  // oy: vertical offset added to every y (world y -> screen y for scrolled levels)
+  function Lcd(w, h) { this.w = w; this.h = h; this.oy = 0; this.px = new Uint8Array(w * h); }
   Lcd.prototype.clear = function () { this.px.fill(0); };
   Lcd.prototype.set = function (x, y, v) {
-    x = Math.floor(x); y = Math.floor(y);
+    x = Math.floor(x); y = Math.floor(y) + this.oy;
     if (x >= 0 && y >= 0 && x < this.w && y < this.h) this.px[y * this.w + x] = v === undefined ? 1 : v;
   };
   Lcd.prototype.line = function (x1, y1, x2, y2, dotted) {
@@ -1162,7 +1210,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   };
 
   // ---- port of GDASH/draw.lua: shapes are strings of 8 lines "x1y1x2y2" ----
-  var TS = "oirqebahpkfuwt^v";
+  var TS = "oirqebahpkfuwt^v/`()[]";
   var SH = "11616166661616113333333333333333" + "22525255552525222522252225222522" +
     "11616166661616113343344434443444" + "22522353245425552555255525552555" +
     "11616166661616112255255225522552" + "11611262136314641565166616661666" +
@@ -1170,7 +1218,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     "16661767176717671767176717671767" + "27572757275727572757275727572757" +
     "15651666176717671767176717671767" + "15651767151765676567656765676567" +
     "17672537554755475547554755475547" + "10176067334333433343334333433343" +
-    "07313167175717571757175717571757" + "00363660105010501050105010501050";
+    "07313167175717571757175717571757" + "00363660105010501050105010501050" +
+    "07707077077707700770077007700770" + "00770007077700770077007700770077" +
+    "07747477077707740774077407740774" + "03700307707707770370037003700370" +
+    "00730007737707770073007300730073" + "04770407077704770477047704770477";
   var IC = "00606066660606002242234324442444" + "30636336360303302343323432343234" +
     "03636366660606032040202340434043" + "03636366660606032040202340434043" +
     "06660206026510201121112111211121" + "06660206026510201121112111211121" +
@@ -1189,7 +1240,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       lcd.line(x + a, y + b, x + c, y + d);
     }
   }
-  function drawTile(lcd, t, sx, r, clipW) {
+  // cy = the level's ceiling (portal markers run from it to the ground)
+  function drawTile(lcd, t, sx, r, clipW, cy) {
+    if (cy == null) cy = CY;
     var top = GD.rowTop(r);
     if (t === 35 || t === 61) {
       var h = t === 61 ? 4 : 8, x0 = Math.max(sx, 0), x1 = Math.min(sx + 8, clipW);
@@ -1200,16 +1253,17 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     } else {
       var ch = String.fromCharCode(t), i = TS.indexOf(ch);
       if (i >= 0) shape(lcd, SH, i * 32, sx, top, 1, null);
-      else if (GD.PORTAL_CHARS.indexOf(ch) >= 0) { lcd.rect(sx + 1, CY, 5, GY - CY); lcd.text(sx + 2, top + 2, ch); }
+      else if (GD.PORTAL_CHARS.indexOf(ch) >= 0) { lcd.rect(sx + 1, cy, 5, GY - cy); lcd.text(sx + 2, top + 2, ch); }
       else lcd.text(sx + 2, top + 2, "?");
     }
   }
   // ground, ceiling (solid in flying modes), hatching for world camera 'cam' on an lcd of any width
-  function drawBackdrop(lcd, cam, fly) {
+  function drawBackdrop(lcd, cam, fly, cy) {
+    if (cy == null) cy = CY;
     lcd.line(0, GY, lcd.w - 1, GY);
-    lcd.line(0, CY - 1, lcd.w - 1, CY - 1, !fly);
+    lcd.line(0, cy - 1, lcd.w - 1, cy - 1, !fly);
     var off = ((cam % 16) + 16) % 16;
-    for (var gx = -off; gx < lcd.w; gx += 16) if (gx >= 0 && gx + 3 < lcd.w) lcd.line(gx, GY + 1, gx + 3, lcd.h - 1);
+    if (GY + 1 + lcd.oy < lcd.h) for (var gx = -off; gx < lcd.w; gx += 16) if (gx >= 0 && gx + 3 < lcd.w) lcd.line(gx, GY + 1, gx + 3, lcd.h - 1 - lcd.oy);
   }
   // one icon; T = wave trail store {x: [], y: []} or null, o = 0 main / 8 dual
   function drawIcon(lcd, P, y, g, vy, gr, still, o, T, cam) {
@@ -1228,20 +1282,36 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     }
     shape(lcd, IC, (m * 2 + f) * 32, PX, y, (s - 1) / 6, fl);
   }
+  // vertical camera of draw.lua: keep the icon between screen y 18 and 42, eased,
+  // snapped on restart; vc = {oy, lx} kept between frames (none = snap)
+  function camY(L, P, vc) {
+    var oy = vc ? vc.oy : 0, t = oy;
+    if (P.y + t < 18) t = 18 - P.y; else if (P.y + t > 42) t = 42 - P.y;
+    if (t > 8 * L.N - 48) t = 8 * L.N - 48;
+    if (t < 0) t = 0;
+    if (!vc || P.x < vc.lx || P.y + oy < 10 || P.y + oy > 52) oy = t; else oy = oy + (t - oy) / 3;
+    oy = Math.floor(oy + 0.5);
+    if (vc) { vc.oy = oy; vc.lx = P.x; }
+    return oy;
+  }
   // port of the draw function in GDASH/draw.lua for a 128x64 screen
   function drawWorld(lcd, L, P, o) {
+    lcd.oy = 0;
     lcd.clear();
     var cam = Math.floor(P.x) - PX, m = P.m;
-    drawBackdrop(lcd, cam, m === 1 || m === 2 || m === 4 || m === 7);
+    lcd.oy = o.oy != null ? o.oy : camY(L, P, o.vcam);
+    drawBackdrop(lcd, cam, m === 1 || m === 2 || m === 4 || m === 7, L.CY);
     var c0 = Math.floor(cam / 8);
-    for (var c = c0; c <= c0 + 16; c++) for (var r = 0; r < 6; r++) {
+    for (var c = c0; c <= c0 + 16; c++) for (var r = 0; r < L.N; r++) {
       var t = L.tile(c, r);
-      if (t !== 46) drawTile(lcd, t, c * 8 - cam, r, 128);
+      if (t !== 46) drawTile(lcd, t, c * 8 - cam, r, 128, L.CY);
     }
     var ex = L.endX - cam;
-    if (ex >= 0 && ex < 128) lcd.line(ex, CY, ex, GY - 1, true);
-    var ax = 40 - cam;
+    if (ex >= 0 && ex < 128) lcd.line(ex, L.CY, ex, GY - 1, true);
+    var ax = 40 - cam, woy = lcd.oy;
+    lcd.oy = 0;
     if (o.attempt != null && ax > 0 && ax < 128 - 60) lcd.text(ax, 24, "Attempt " + o.attempt);
+    lcd.oy = woy;
     if (o.dead) {
       var d = Math.min(13, Math.floor(o.deadT * 40) + 2);
       shape(lcd, IC, 16 * 32, PX + 3 - d, Math.floor(P.y) + 3 - d, d / 3, null);
@@ -1251,6 +1321,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       drawIcon(lcd, P, P.y, P.g, P.vy, P.gr, still, 0, o.trail, cam);
       if (P.du) drawIcon(lcd, P, P.y2, P.g2, P.vy2, P.gr2, still, 8, o.trail, cam);
     }
+    lcd.oy = 0;
+    if (L.N > 6) lcd.fill(0, 0, 128, 9, 0);  // scrolled tiles may reach into the HUD strip
     if (o.hud) {
       lcd.text(1, 1, o.hudLeft);
       lcd.rect(32, 2, 62, 5);
@@ -1261,13 +1333,14 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   }
 
   // ---------------- document state ----------------
-  var doc;          // { n, name, diff, W, cells: [6 arrays of chars], u, m }
+  var doc;          // { n, name, diff, W, cells: [6 to 20 arrays of chars, ground first], u, m }
   var undoStack = [], redoStack = [];
   var cur = "#", tool = "paint", zoom = 4, showGrid = true;
   var hover = null, sel = null, clip = null, deaths = [], solveRes = null, solveSig = null;
   var dirtyTimer = null;
 
-  function blankCells(W) { var c = []; for (var r = 0; r < 6; r++) { c.push(new Array(W).fill(".")); } return c; }
+  function nRows() { return doc.cells.length; }
+  function yOff() { return 8 * (nRows() - 6); }  // editor canvas: world y + yOff() = canvas y
   function rowsOf(d) { d = d || doc; return d.cells.map(function (a) { return a.join(""); }); }
   function exportText() { return GD.exportLevel({ n: doc.n, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }, { plain: !!($("fPlain") && $("fPlain").checked) }); }
   function snapshot() { return JSON.stringify({ n: doc.n, name: doc.name, diff: doc.diff, W: doc.W, rows: rowsOf(), u: doc.u, m: doc.m }); }
@@ -1301,7 +1374,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     doc.W = W;
   }
   function setCell(c, r, ch) {
-    if (c < 0 || r < 0 || r > 5) return;
+    if (c < 0 || r < 0 || r >= nRows()) return;
     ensureW(c + 1);
     doc.cells[r][c] = ch;
   }
@@ -1322,6 +1395,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (document.activeElement !== $("fName")) $("fName").value = doc.name;
     if (document.activeElement !== $("fDiff")) $("fDiff").value = doc.diff;
     if (document.activeElement !== $("fW")) $("fW").value = doc.W;
+    if (document.activeElement !== $("fH")) $("fH").value = nRows();
     if (document.activeElement !== $("fU")) $("fU").value = doc.u;
     if (document.activeElement !== $("fM")) $("fM").value = doc.m;
     $("bUndo").disabled = !undoStack.length; $("bRedo").disabled = !redoStack.length;
@@ -1388,7 +1462,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function viewX() { return scroller.scrollLeft / zoom + VIEW_OFF; }
   function resizeEditor() {
     ed.width = Math.max(200, ed.clientWidth || ed.parentNode.clientWidth - 12);
-    ed.height = RULER + 64 * zoom;
+    ed.height = RULER + (64 + yOff()) * zoom;
     $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
     drawEditor();
   }
@@ -1398,26 +1472,34 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (!doc) return;
     $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
     var vx = viewX(), bx0 = Math.floor(vx) - 8, wpx = Math.ceil(ed.width / zoom) + 24;
-    var L = GD.makeLevel(rowsOf());
-    var lcd = new Lcd(wpx, 64);
-    drawBackdrop(lcd, bx0);
+    var L = GD.makeLevel(rowsOf()), yo = yOff(), cy = L.CY;
+    if (ed.height !== RULER + (64 + yo) * zoom) ed.height = RULER + (64 + yo) * zoom;
+    var lcd = new Lcd(wpx, 64 + yo);
+    lcd.oy = yo;
+    drawBackdrop(lcd, bx0, false, cy);
     var c0 = Math.floor(bx0 / 8) - 1, c1 = Math.ceil((bx0 + wpx) / 8) + 1;
-    for (var c = c0; c <= c1; c++) for (var r = 0; r < 6; r++) {
+    for (var c = c0; c <= c1; c++) for (var r = 0; r < L.N; r++) {
       var t = L.tile(c, r);
-      if (t !== 46) drawTile(lcd, t, c * 8 - bx0, r, wpx + 100);
+      if (t !== 46) drawTile(lcd, t, c * 8 - bx0, r, wpx + 100, cy);
     }
-    var ex = L.endX - bx0; lcd.line(ex, CY, ex, GY - 1, true);
+    var ex = L.endX - bx0; lcd.line(ex, cy, ex, GY - 1, true);
     // start cube outline
     lcd.rect(0 - bx0, GY - S, S, S);
     edctx.fillStyle = "#272b31"; edctx.fillRect(0, 0, ed.width, ed.height);
     var ox = -(vx - bx0) * zoom;
     lcd.blit(edctx, ox, RULER, zoom);
     var X = function (wx) { return (wx - vx) * zoom; };
-    var Y = function (py) { return RULER + py * zoom; };
+    var Y = function (py) { return RULER + (py + yo) * zoom; }, CY = cy;
     // outside the level: shade
     edctx.fillStyle = "rgba(40,60,90,0.18)";
-    edctx.fillRect(X(doc.W * 8), RULER, ed.width, 64 * zoom);
-    if (X(0) > 0) edctx.fillRect(0, RULER, X(0), 64 * zoom);
+    edctx.fillRect(X(doc.W * 8), RULER, ed.width, (64 + yo) * zoom);
+    if (X(0) > 0) edctx.fillRect(0, RULER, X(0), (64 + yo) * zoom);
+    // taller levels: dashed line where one radio screen (6 rows) ends
+    if (yo > 0) {
+      edctx.strokeStyle = "rgba(255,181,71,0.5)"; edctx.setLineDash([4, 4]);
+      edctx.beginPath(); edctx.moveTo(0, Math.round(Y(GY - 48)) + 0.5); edctx.lineTo(ed.width, Math.round(Y(GY - 48)) + 0.5); edctx.stroke();
+      edctx.setLineDash([]);
+    }
     // ruler + grid
     edctx.font = "10px ui-monospace, Consolas, monospace"; edctx.textBaseline = "top";
     for (c = Math.max(0, c0); c <= c1; c++) {
@@ -1430,7 +1512,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     }
     if (showGrid && zoom >= 3) {
       edctx.strokeStyle = "rgba(60,110,200,0.16)";
-      for (r = 0; r <= 6; r++) { var gy = Math.round(Y(GY - 8 * r)) + 0.5; edctx.beginPath(); edctx.moveTo(0, gy); edctx.lineTo(ed.width, gy); edctx.stroke(); }
+      for (r = 0; r <= L.N; r++) { var gy = Math.round(Y(GY - 8 * r)) + 0.5; edctx.beginPath(); edctx.moveTo(0, gy); edctx.lineTo(ed.width, gy); edctx.stroke(); }
     }
     // selection
     if (sel) {
@@ -1486,10 +1568,10 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function cellAt(e) {
     var rc = ed.getBoundingClientRect();
     var mx = (e.clientX - rc.left) * ed.width / rc.width, my = (e.clientY - rc.top) * ed.height / rc.height;
-    var wx = viewX() + mx / zoom, py = (my - RULER) / zoom;
+    var wx = viewX() + mx / zoom, py = (my - RULER) / zoom - yOff(), top = nRows() - 1, cy = GY - 8 * nRows();
     var c = Math.floor(wx / 8), r = Math.floor((GY - 1 - py) / 8);
-    if (py < CY) r = 5; if (py >= GY) r = 0;
-    return { c: c, r: Math.max(0, Math.min(5, r)), inside: py >= CY && py < GY, wx: wx };
+    if (py < cy) r = top; if (py >= GY) r = 0;
+    return { c: c, r: Math.max(0, Math.min(top, r)), inside: py >= cy && py < GY, wx: wx };
   }
   var drag = null;
   ed.addEventListener("contextmenu", function (e) { e.preventDefault(); });
@@ -1540,7 +1622,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var L = GD.makeLevel(rowsOf());
     var col = hover ? hover.c : Math.max(0, Math.floor((viewX() + 28) / 8));
     var P = GD.newPlayer(); P.x = col * 8;
-    drawWorld(pvLcd, L, P, { playing: false, hud: true, hudLeft: "A1", pct: Math.max(0, Math.min(100, Math.floor(P.x * 100 / L.endX))), attempt: 1 });
+    // taller levels: the camera shows the hovered row
+    var oy = hover ? camY(L, { x: 0, y: GD.rowTop(hover.r) + 1 }, null) : camY(L, P, null);
+    drawWorld(pvLcd, L, P, { oy: oy, playing: false, hud: true, hudLeft: "A1", pct: Math.max(0, Math.min(100, Math.floor(P.x * 100 / L.endX))), attempt: 1 });
     pvLcd.blit(pvctx, 0, 0, 2);
   }
 
@@ -1561,9 +1645,9 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function paste() {
     if (!clip) { toast("Nothing copied yet."); return; }
     var at = hover && hover.c >= 0 ? hover : sel ? { c: normSel(sel).c0, r: normSel(sel).r0 } : { c: 0, r: 0 };
-    var r0 = Math.min(at.r, 6 - clip.h), transp = $("fTransp").checked;
+    var r0 = Math.max(0, Math.min(at.r, nRows() - clip.h)), transp = $("fTransp").checked;
     pushUndo();
-    for (var j = 0; j < clip.h; j++) for (var i = 0; i < clip.w; i++) {
+    for (var j = 0; j < Math.min(clip.h, nRows()); j++) for (var i = 0; i < clip.w; i++) {
       var ch = clip.data[j][i];
       if (transp && ch === ".") continue;
       setCell(at.c + i, r0 + j, ch);
@@ -1634,6 +1718,16 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     pushUndo();
     if (v > doc.W) ensureW(v); else { doc.cells.forEach(function (a) { a.length = v; }); doc.W = v; }
     changed();
+  };
+  $("fH").onchange = function () {
+    var v = Math.max(6, Math.min(20, Math.floor(+this.value || 6)));
+    if (v === nRows()) return;
+    var lost = doc.cells.slice(v).some(function (a) { return a.some(function (ch) { return ch !== "."; }); });
+    pushUndo();
+    while (doc.cells.length < v) doc.cells.push(new Array(doc.W).fill("."));
+    doc.cells.length = v;
+    sel = null; changed();
+    if (lost) toast("Removed the top rows and the tiles on them (Undo brings them back).", true);
   };
   $("fZoom").onchange = function () { var cx = viewX(); zoom = +this.value; resizeEditor(); scroller.scrollLeft = (cx - VIEW_OFF) * zoom; drawEditor(); };
   $("fGrid").onchange = function () { showGrid = this.checked; drawEditor(); };
@@ -1713,6 +1807,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     play.P = play.prac && play.cps.length ? GD.clone(play.cps[play.cps.length - 1]) : GD.newPlayer();
     play.acc = 0; play.pend = false; play.mt = 0; play.state = "play"; play.deadT = 0; play.stepN = 0;
     play.trail = { x: [], y: [] };
+    play.vcam = null;
     play.music = $("fPlayMusic").checked ? GD.makeMusic(doc.m || null, doc.u, function (f, ms) { beep(f, ms); }) : null;
     if (play.music) play.music(-1);
   }
@@ -1754,7 +1849,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       if (play.deadT > 0.8) { if (play.auto) { play.running = false; } else newAttempt(); }
     }
     drawWorld(pcLcd, play.L, play.P, {
-      playing: play.state === "play", dead: play.state === "dead", deadT: play.deadT, hud: true, trail: play.trail,
+      playing: play.state === "play", dead: play.state === "dead", deadT: play.deadT, hud: true, trail: play.trail, vcam: play.vcam || (play.vcam = { oy: 0, lx: 1e9 }),
       hudLeft: play.prac ? "PRAC" + play.cps.length : "A" + play.attempts, pct: pctOf(play.P), attempt: play.attempts
     });
     if (play.state === "win") { pcLcd.text(14, 16, "LEVEL COMPLETE!", 0x201); pcLcd.text(14, 34, play.prac ? "Practice run" : "Attempts: " + play.attempts); }
