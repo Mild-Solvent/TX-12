@@ -159,9 +159,9 @@ local function updatePlayer()
 			P.fuel = P.fuel - thr*3
 			if P.fuel <= 0 then
 				P.fuel  = 0
-				playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/empty.wav") 
+				playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/empty.wav") 
 			else
-				playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/thrust.wav") 
+				playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/thrust.wav") 
 			end
 		end
 
@@ -200,7 +200,7 @@ local function updateShots()
 	-- ADD SHOT?
 	if Player.energy > 0 and lastShot + shotInterval <= now then
 		lastShot = now
-		playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/shot.wav") 
+		playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/shot.wav") 
 		Shots[#Shots+1] =
 			{
 			x  = Player.x1,
@@ -267,7 +267,7 @@ local function updateComets()
 			if Shots[j] ~= nil and C ~= nil then
 				-- HIT BULLET?
 				if pointInsideCircle(Shots[j].x,Shots[j].y,C.x,C.y,C.size) then
-					playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/explos.wav") 
+					playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/explos.wav") 
 					Shots [j]    = nil
 					Comets[i].px = nil
 					Comets[i].py = nil
@@ -290,12 +290,12 @@ local function updateComets()
 			Player.energy     = Player.energy - 20
 			Player.lastEnergy = now
 			if Player.energy <= 0 then
-				playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/gover.wav") 
+				playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/gover.wav") 
 				Player.energy   = 0
 				Player.killTime = now
 				newExplosion(Player.x,Player.y,Player.size,5)
 			else
-				playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/damage.wav") 
+				playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/damage.wav") 
 				Player.invisible = now
 				local vx  = Player.vx
 				local vy  = Player.vy
@@ -346,7 +346,7 @@ local function newLevel()
 	if Player.level > 2 then newComet(0) end
 	if Player.level > 4 then newComet(screenW) end
 
-	playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/ready.wav") 
+	playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/ready.wav") 
 	state = GAME
 
 end
@@ -426,7 +426,7 @@ local function update()
 	if Player.energy <= 0 then
 		lcd.drawText(26,screenH/2-7,"GAME OVER", MIDSIZE)
 		if Player.killTime < now-500 then
-			playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/stats.wav") 
+			playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/stats.wav") 
 			state = STATS
 		end
 	end
@@ -440,7 +440,7 @@ local function init()
 	-- lcd.lock()
 	lcd.clear()
 	oldTime = getTime()
-	playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/splash.wav") 
+	playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/splash.wav") 
 end
 
 --------------------------------------------
@@ -457,8 +457,8 @@ local function run(event)
 
 	-- SPLASH SCREEN
 	if state == SPLASH then
-		lcd.drawPixmap(0,0, "/SCRIPTS/TOOLS/ASTEROIDS/gfx/splash1.bmp")
-		lcd.drawPixmap(64,0, "/SCRIPTS/TOOLS/ASTEROIDS/gfx/splash2.bmp")
+		lcd.drawPixmap(0,0, "/SCRIPTS/GAMES/ASTEROIDS/gfx/splash1.bmp")
+		lcd.drawPixmap(64,0, "/SCRIPTS/GAMES/ASTEROIDS/gfx/splash2.bmp")
 		if now > splashStart + 300 then
 			newLevel()
 		end
@@ -482,7 +482,7 @@ local function run(event)
 		--lcd.drawFilledRectangle(0,0,screenW,screenH)
 
 		if getValue("ele") > 500 then
-			playFile("/SCRIPTS/TOOLS/ASTEROIDS/snd/splash.wav") 
+			playFile("/SCRIPTS/GAMES/ASTEROIDS/snd/splash.wav") 
 			Player.level = 0
 			Player.score = 0
 			Player.kills = 0

@@ -199,7 +199,7 @@ local function reset(won)
 		stats.level  = level
 		stats.finish = getTime()
 		showGameOver = getTime()
-		playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/gover.wav") 
+		playFile("/SCRIPTS/GAMES/BREAKOUT/snd/gover.wav") 
 	end
 
 	-- RESET VARS
@@ -285,7 +285,7 @@ local function update(deltaTime)
 
       ball.dy = -ball.dy * yr
 
-      playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/bat.wav")
+      playFile("/SCRIPTS/GAMES/BREAKOUT/snd/bat.wav")
    end
 
 	for i, brick in pairs(bricks) do
@@ -312,13 +312,13 @@ local function update(deltaTime)
 				if brick.lives == 0 then
 					stats.kills = stats.kills + 1
 					visibleBricks = visibleBricks - 1 
-					playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/brick.wav")
+					playFile("/SCRIPTS/GAMES/BREAKOUT/snd/brick.wav")
 				else
-					playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/brick.wav")
+					playFile("/SCRIPTS/GAMES/BREAKOUT/snd/brick.wav")
 				end
 				score = score + 10; stats.score = score
 				if visibleBricks == 0 then
-					playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/up.wav")
+					playFile("/SCRIPTS/GAMES/BREAKOUT/snd/up.wav")
 					reset(true)
 					showLevelUp = getTime()
 				end
@@ -333,7 +333,7 @@ local function update(deltaTime)
 		ball.y  = paddle.y - paddle.height - 2
 		-- THROW BALL!
 		if getValue("ele") > 500 then
-			playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/throw.wav")
+			playFile("/SCRIPTS/GAMES/BREAKOUT/snd/throw.wav")
 			ball.dx = math.random(1,2) == 1 and -0.55 or 0.55
 			ball.dy = -0.5
 			print(getValue("thr"))
@@ -354,7 +354,7 @@ local function update(deltaTime)
    end
    
 	--if getValue('ele') > 999 or getValue('ele') < -999 then
-	--	playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/up.wav")
+	--	playFile("/SCRIPTS/GAMES/BREAKOUT/snd/up.wav")
 	--	reset(true)
 	--	showLevelUp = getTime()
 	--end
@@ -362,24 +362,24 @@ local function update(deltaTime)
    if ball.x + ball.width > screenWidth then
       ball.x = screenWidth - ball.width
       ball.dx = -ball.dx
-      playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/border.wav")
+      playFile("/SCRIPTS/GAMES/BREAKOUT/snd/border.wav")
    elseif ball.x < 0 then
       ball.x = 0
       ball.dx = -ball.dx
-      playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/border.wav")
+      playFile("/SCRIPTS/GAMES/BREAKOUT/snd/border.wav")
    end
    
 	if ball.y < 0 then
 		ball.y = 0
 		ball.dy = -ball.dy
-		playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/border.wav")
+		playFile("/SCRIPTS/GAMES/BREAKOUT/snd/border.wav")
 	-- LOST BALL?
 	elseif ball.y + ball.height > screenHeight then 
 		resetBall()
 		lives = lives - 1
       
       if lives >= 0 then
-      	playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/killed.wav")
+      	playFile("/SCRIPTS/GAMES/BREAKOUT/snd/killed.wav")
 		elseif lives < 0 then
 	 		reset(false)
       end
@@ -432,11 +432,11 @@ local function run(event)
 	if showSplash > 0 then
 		if newTime < (showSplash+250) then
 			if playSplash == true then 
-				playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/splash.wav") 
+				playFile("/SCRIPTS/GAMES/BREAKOUT/snd/splash.wav") 
 				playSplash = false
 			end
-  			lcd.drawPixmap(0,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/splash1.bmp")
-  			lcd.drawPixmap(64,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/splash2.bmp")
+  			lcd.drawPixmap(0,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/splash1.bmp")
+  			lcd.drawPixmap(64,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/splash2.bmp")
 			return 0
 		else
 			showSplash = 0
@@ -445,8 +445,8 @@ local function run(event)
 	-- GAME OVER SCREEN
 	elseif showGameOver > 0	then
 		if newTime < (showGameOver+350) then
-  			lcd.drawPixmap(0,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/gover1.bmp")
-  			lcd.drawPixmap(64,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/gover2.bmp")
+  			lcd.drawPixmap(0,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/gover1.bmp")
+  			lcd.drawPixmap(64,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/gover2.bmp")
 			return 0
 		else
 			showGameOver = 0
@@ -458,7 +458,7 @@ local function run(event)
 	-- SHOW STATS SCREEN
 	elseif showStats == true then
 		if playStats == true then 
-			playFile("/SCRIPTS/TOOLS/BREAKOUT/snd/stats.wav") 
+			playFile("/SCRIPTS/GAMES/BREAKOUT/snd/stats.wav") 
 			playStats = false
 		end
 		lcd.drawRectangle(2, 2, screenWidth-4, screenHeight-4)
@@ -483,8 +483,8 @@ local function run(event)
 	-- LEVEL UP SCREEN
 	elseif showLevelUp > 0	then
 		if newTime < (showLevelUp+250) then
-  			lcd.drawPixmap(0,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/up1.bmp")
-  			lcd.drawPixmap(64,0, "/SCRIPTS/TOOLS/BREAKOUT/gfx/up2.bmp")
+  			lcd.drawPixmap(0,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/up1.bmp")
+  			lcd.drawPixmap(64,0, "/SCRIPTS/GAMES/BREAKOUT/gfx/up2.bmp")
 			return 0
 		else
 			showLevelUp = 0

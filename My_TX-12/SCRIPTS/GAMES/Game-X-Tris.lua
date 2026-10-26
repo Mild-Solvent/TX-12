@@ -174,11 +174,11 @@ local function lineCheck()
 		if stats.left < 0 then
 			stats.left = 15
 			stats.stage = stats.stage + 1
-			playFile("/SCRIPTS/TOOLS/X-TRIS/snd/levelup.wav")
+			playFile("/SCRIPTS/GAMES/X-TRIS/snd/levelup.wav")
 		else
-			    if #fullRows == 1 then playFile("/SCRIPTS/TOOLS/X-TRIS/snd/filled1.wav")
-			elseif #fullRows == 2 then playFile("/SCRIPTS/TOOLS/X-TRIS/snd/filled2.wav"); stats.score = stats.score + 10
-			elseif #fullRows >= 3 then playFile("/SCRIPTS/TOOLS/X-TRIS/snd/filled3.wav"); stats.score = stats.score + 20 end
+			    if #fullRows == 1 then playFile("/SCRIPTS/GAMES/X-TRIS/snd/filled1.wav")
+			elseif #fullRows == 2 then playFile("/SCRIPTS/GAMES/X-TRIS/snd/filled2.wav"); stats.score = stats.score + 10
+			elseif #fullRows >= 3 then playFile("/SCRIPTS/GAMES/X-TRIS/snd/filled3.wav"); stats.score = stats.score + 20 end
 		end
 	end
 end
@@ -209,7 +209,7 @@ local function rotateBrick(dir)
 	if not isBlocked(Brick.c,Brick.r,csNew,rsNew) and not outsideGrid(Brick.c,Brick.r,csNew,rsNew) then 
 		Brick.cs = csNew; 
 		Brick.rs = rsNew; 
-		playFile("/SCRIPTS/TOOLS/X-TRIS/snd/rot.wav")
+		playFile("/SCRIPTS/GAMES/X-TRIS/snd/rot.wav")
 		return true
 	end
 
@@ -234,7 +234,7 @@ local function newBrick()
 
 	-- TILES OCCUPIED? GAME OVER!
 	if isBlocked(Brick.c,Brick.r) then
-		playFile("/SCRIPTS/TOOLS/X-TRIS/snd/gover.wav")
+		playFile("/SCRIPTS/GAMES/X-TRIS/snd/gover.wav")
 		state = SCR_GAMEOVER
 	end
 end
@@ -264,20 +264,20 @@ local function updateGame()
 		-- RIGHT?
 		if getValue('ail') > 300 then
 			if not outsideGrid(Brick.c+1,Brick.r) and not isBlocked(Brick.c+1,Brick.r) then
-				playFile("/SCRIPTS/TOOLS/X-TRIS/snd/move.wav")
+				playFile("/SCRIPTS/GAMES/X-TRIS/snd/move.wav")
 				Brick.c = Brick.c + 1
 			end
 		-- LEFT
 		elseif getValue('ail') < -300 then
 			if not outsideGrid(Brick.c-1,Brick.r) and not isBlocked(Brick.c-1,Brick.r) then
-				playFile("/SCRIPTS/TOOLS/X-TRIS/snd/move.wav")
+				playFile("/SCRIPTS/GAMES/X-TRIS/snd/move.wav")
 				Brick.c = Brick.c - 1
 			end
 		-- DOWN
 		elseif getValue('ele') < -300 then
 			if not outsideGrid(Brick.c,Brick.r+1) and not isBlocked(Brick.c,Brick.r+1) then
 				Brick.r = Brick.r + 1
-				playFile("/SCRIPTS/TOOLS/X-TRIS/snd/move.wav")
+				playFile("/SCRIPTS/GAMES/X-TRIS/snd/move.wav")
 			end
 			-- PLACE HERE?
 			if outsideGrid(Brick.c,Brick.r+1) == true or isBlocked(Brick.c,Brick.r+1) then
@@ -303,11 +303,11 @@ local function updateGame()
 		lastAutoMove = now
 		-- CAN MOVE DOWN?
 		if not isBlocked(Brick.c,Brick.r+1) and not outsideGrid(Brick.c,Brick.r+1) then
-			playFile("/SCRIPTS/TOOLS/X-TRIS/snd/shift.wav")
+			playFile("/SCRIPTS/GAMES/X-TRIS/snd/shift.wav")
 			Brick.r = Brick.r + 1
 		-- PLACE HERE!
 		else
-			playFile("/SCRIPTS/TOOLS/X-TRIS/snd/set.wav")
+			playFile("/SCRIPTS/GAMES/X-TRIS/snd/set.wav")
 			for i = 1,4 do
 				Map[Brick.c+Brick.cs[i]][Brick.r+Brick.rs[i]].filled = true
 			end
@@ -355,7 +355,7 @@ end
 
 local function newGame()
 	local c,r
-	playFile("/SCRIPTS/TOOLS/X-TRIS/snd/ready.wav")
+	playFile("/SCRIPTS/GAMES/X-TRIS/snd/ready.wav")
 	lastAutoMove = getTime()
 	lastMove     = getTime()
 	lastRot      = getTime()
@@ -379,9 +379,9 @@ end
 local function update(deltaTime)
 	-- SPLASH SCREEN?
 	if state == SCR_SPLASH then
-		if sound == true then print("SOUND!"); playFile("/SCRIPTS/TOOLS/X-TRIS/snd/splash.wav"); sound = false end
-		lcd.drawPixmap(0,0, "/SCRIPTS/TOOLS/X-TRIS/gfx/splash1.bmp")
-		lcd.drawPixmap(64,0, "/SCRIPTS/TOOLS/X-TRIS/gfx/splash2.bmp")
+		if sound == true then print("SOUND!"); playFile("/SCRIPTS/GAMES/X-TRIS/snd/splash.wav"); sound = false end
+		lcd.drawPixmap(0,0, "/SCRIPTS/GAMES/X-TRIS/gfx/splash1.bmp")
+		lcd.drawPixmap(64,0, "/SCRIPTS/GAMES/X-TRIS/gfx/splash2.bmp")
 		if now-start >= 200 then
 			state = SCR_GAME
 			newGame()
