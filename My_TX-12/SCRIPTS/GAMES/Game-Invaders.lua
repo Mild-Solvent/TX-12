@@ -14,6 +14,12 @@ local PW, PH = 9, 4          -- player size
 local PY = LCD_H - PH - 1
 local TOP = 9
 
+-- EdgeTX on B&W radios has no table library
+local function removeAt(t, i)
+  for j = i, #t - 1 do t[j] = t[j + 1] end
+  t[#t] = nil
+end
+
 local state, aliens, alive, fleetX, fleetY, fleetDir, stepTimer
 local px, shot, bombs, lives, score, best, wave, lastTime, frame
 
@@ -166,11 +172,11 @@ local function update(dt, fire)
     local b = bombs[i]
     b.y = b.y + 45 * dt
     if b.y >= PY and b.y < PY + PH and b.x >= px and b.x < px + PW then
-      table.remove(bombs, i)
+      removeAt(bombs, i)
       loseLife()
       if state ~= "play" then return end
     elseif b.y > LCD_H then
-      table.remove(bombs, i)
+      removeAt(bombs, i)
     end
   end
 

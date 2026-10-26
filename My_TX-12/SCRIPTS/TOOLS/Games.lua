@@ -28,7 +28,15 @@ local function scan()
     end
   end)
   if not ok then err = "Cannot read " .. DIR end
-  table.sort(games, function(a, b) return a.name < b.name end)
+  -- insertion sort: EdgeTX on B&W radios has no table library
+  for i = 2, #games do
+    local g, j = games[i], i - 1
+    while j >= 1 and games[j].name > g.name do
+      games[j + 1] = games[j]
+      j = j - 1
+    end
+    games[j + 1] = g
+  end
 end
 
 local function init()

@@ -10,6 +10,12 @@ local CELL_W, CELL_H = 16, 15
 local OX, OY = 1, 2
 local SIZE = 4
 
+-- EdgeTX on B&W radios has no table library
+local function removeAt(t, i)
+  for j = i, #t - 1 do t[j] = t[j + 1] end
+  t[#t] = nil
+end
+
 local grid, score, best, over, won, armed
 
 local function emptyCells()
@@ -58,7 +64,7 @@ local function slideLine(line)
       out[i] = out[i] * 2
       gained = gained + out[i]
       if out[i] == 2048 then won = true end
-      table.remove(out, i + 1)
+      removeAt(out, i + 1)
     end
     i = i + 1
   end

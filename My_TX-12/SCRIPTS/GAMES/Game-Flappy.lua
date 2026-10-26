@@ -16,6 +16,12 @@ local PIPE_GAP = 24
 local PIPE_SPACING = 52
 local PIPE_SPEED = 38   -- px/s
 
+-- EdgeTX on B&W radios has no table library
+local function removeAt(t, i)
+  for j = i, #t - 1 do t[j] = t[j + 1] end
+  t[#t] = nil
+end
+
 local state, birdY, birdVY, pipes, score, best, lastTime, stickArmed
 
 local function newPipe(x)
@@ -87,7 +93,7 @@ local function update(dt, flap)
     end
   end
   if pipes[1].x + PIPE_W < 0 then
-    table.remove(pipes, 1)
+    removeAt(pipes, 1)
     pipes[#pipes + 1] = newPipe(lastX + PIPE_SPACING)
   end
 
