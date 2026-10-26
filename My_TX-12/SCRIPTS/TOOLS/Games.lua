@@ -78,19 +78,29 @@ local function startGame(entry)
     game = result
     err = nil
   else
-    err = entry.name .. ": " .. tostring(result)
+    err = entry.name .. ": " .. string.gsub(tostring(result), DIR, "")
     stopGame()
   end
 end
 
+local function drawError()
+  lcd.clear()
+  lcd.drawFilledRectangle(0, 0, LCD_W, 9)
+  lcd.drawText(2, 1, "ERROR", SMLSIZE + INVERS)
+  local y, i = 11, 1
+  while i <= #err and y < LCD_H - 8 do
+    lcd.drawText(1, y, string.sub(err, i, i + 20), SMLSIZE)
+    i, y = i + 21, y + 8
+  end
+  lcd.drawText(LCD_W - 1, LCD_H - 7, "any key", SMLSIZE + INVERS + RIGHT)
+end
+
 local function drawMenu()
+  if err then return drawError() end
   lcd.clear()
   lcd.drawFilledRectangle(0, 0, LCD_W, 9)
   lcd.drawText(2, 1, "GAMES", SMLSIZE + INVERS)
   lcd.drawText(LCD_W - 2, 1, #games .. " games", SMLSIZE + INVERS + RIGHT)
-  if err then
-    lcd.drawText(2, 54, err, SMLSIZE + BLINK)
-  end
   if #games == 0 then
     lcd.drawText(2, 20, "No games in", SMLSIZE)
     lcd.drawText(2, 30, DIR, SMLSIZE)
@@ -115,7 +125,7 @@ local function run(event)
     end
     local ok, result = pcall(game.run, event)
     if not ok then
-      err = tostring(result)
+      err = (string.gsub(tostring(result), DIR, ""))
       stopGame()
     elseif result ~= 0 then
       stopGame()
@@ -123,7 +133,9 @@ local function run(event)
     return 0
   end
 
-  if event == EVT_VIRTUAL_EXIT then
+  if err and event ~= 0 then
+    err = nil
+  elseif event == EVT_VIRTUAL_EXIT then
     return 2
   elseif event == EVT_VIRTUAL_NEXT and #games > 0 then
     sel = sel % #games + 1
