@@ -30,8 +30,20 @@ local HALF = {
   "##############",
 }
 
-local DIRS = { {1, 0}, {-1, 0}, {0, -1}, {0, 1} }   -- right, left, up, down
-local OPPOSITE = { 2, 1, 4, 3 }
+-- Directions: 1 right, 2 left, 3 up, 4 down. Plain ifs instead of lookup
+-- tables: on the TX12, direction table lookups kept coming back nil.
+local function vec(dir)
+  if dir == 1 then return 1, 0
+  elseif dir == 3 then return 0, -1
+  elseif dir == 4 then return 0, 1 end
+  return -1, 0
+end
+
+local function opposite(dir)
+  if dir == 1 then return 2 elseif dir == 3 then return 4
+  elseif dir == 4 then return 3 end
+  return 1
+end
 
 local maze, dotsLeft
 local pac, ghosts, wantDir
@@ -120,9 +132,9 @@ local function readStick()
 end
 
 local function pixelPos(a)
-  local d = DIRS[a.dir]
-  local x = (a.c - 1 + d[1] * a.t) * T
-  local y = (a.r - 1 + d[2] * a.t) * T
+  local dx, dy = vec(a.dir)
+  local x = (a.c - 1 + dx * a.t) * T
+  local y = (a.r - 1 + dy * a.t) * T
   if x < -T then x = x + MW * T elseif x > (MW - 1) * T then x = x - MW * T end
   return x, y
 end
@@ -144,33 +156,33 @@ local function eatAt(c, r)
     frightTime = math.max(2, 7 - level)
     for _, g in ipairs(ghosts) do
       g.ate = false
-      if not g.home and not g.leaving then g.dir = OPPOSITE[g.dir] ; g.t = 1 - g.t end
+      if not g.home and not g.leaving then g.dir = opposite(g.dir) ; g.t = 1 - g.t end
     end
     playTone(600, 120, 0, PLAY_NOW)
   end
 end
 
 local function arrive(a)
-  local d = DIRS[a.dir]
-  a.c = (a.c - 1 + d[1]) % MW + 1
-  a.r = a.r + d[2]
+  local dx, dy = vec(a.dir)
+  a.c = (a.c - 1 + dx) % MW + 1
+  a.r = a.r + dy
   a.t = 0
 end
 
 local function movePac(dt)
   -- instant reverse
-  if wantDir == OPPOSITE[pac.dir] and pac.t > 0 then
+  if wantDir == opposite(pac.dir) and pac.t > 0 then
     arrive(pac)
     pac.dir = wantDir
     pac.t = 0
   end
   if pac.t == 0 then
-    local w = DIRS[wantDir]
-    if walkable(pac.c + w[1], pac.r + w[2]) then
+    local wx, wy = vec(wantDir)
+    if walkable(pac.c + wx, pac.r + wy) then
       pac.dir = wantDir
     end
-    local d = DIRS[pac.dir]
-    if not walkable(pac.c + d[1], pac.r + d[2]) then
+    local dx, dy = vec(pac.dir)
+    if not walkable(pac.c + dx, pac.r + dy) then
       return
     end
   end
@@ -185,8 +197,8 @@ local function ghostTarget(g)
   if g.leaving then return 14, 4 end
   if g.id == 1 then return pac.c, pac.r end
   if g.id == 2 then
-    local d = DIRS[pac.dir]
-    return pac.c + d[1] * 4, pac.r + d[2] * 4
+    local dx, dy = vec(pac.dir)
+    return pac.c + dx * 4, pac.r + dy * 4
   end
   if g.id == 3 then return MW + 1 - pac.c, pac.r end
   -- shy ghost: chase when far, wander to a corner when close
@@ -199,13 +211,13 @@ local function chooseGhostDir(g)
   local tc, tr = ghostTarget(g)
   local options = {}
   for i = 1, 4 do
-    local d = DIRS[i]
-    if i ~= OPPOSITE[g.dir] and walkable(g.c + d[1], g.r + d[2], g) then
+    local dx, dy = vec(i)
+    if i ~= opposite(g.dir) and walkable(g.c + dx, g.r + dy, g) then
       options[#options + 1] = i
     end
   end
   if #options == 0 then
-    g.dir = OPPOSITE[g.dir]
+    g.dir = opposite(g.dir)
     return
   end
   if frightTime > 0 and not g.leaving then
@@ -213,8 +225,8 @@ local function chooseGhostDir(g)
     return
   end
   for _, i in ipairs(options) do
-    local d = DIRS[i]
-    local dc, dr = g.c + d[1] - tc, g.r + d[2] - tr
+    local dx, dy = vec(i)
+    local dc, dr = g.c + dx - tc, g.r + dy - tr
     local dist = dc * dc + dr * dr
     if dist < bestD then best, bestD = i, dist end
   end
@@ -321,10 +333,7 @@ local function drawPac()
   local x, y = pixelPos(pac)
   x, y = math.floor(x + 1.5), math.floor(y + 1.5)
   local open = (anim % 4) < 2
-  -- no table lookup here: on the TX12 DIRS[pac.dir] came back nil
-  local mx, my = -1, 0
-  if pac.dir == 1 then mx = 1 elseif pac.dir == 3 then mx, my = 0, -1
-  elseif pac.dir == 4 then mx, my = 0, 1 end
+  local mx, my = vec(pac.dir)
   for dy = -1, 1 do
     for dx = -1, 1 do
       local mouth = open and (dx == mx and dy == my)

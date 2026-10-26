@@ -130,7 +130,7 @@ frame at the capped `dt`.
 | Launcher said "No games" | `dir()` with trailing `/` | drop the slash |
 | `?:0: attempt to index field '?'` | stripped `.luac`, no line info | `loadScript(path, "Td")` |
 | Invaders crashed when hit | `loseLife()` emptied the list the loop was walking | return after changing the list |
-| Pac-Man `attempt to index local 'd'` in `drawPac` | `DIRS[pac.dir]` came back nil on the radio only; never reproduced off the radio | compute the vector with `if`s, no lookup |
+| Pac-Man `attempt to index local 'd'`, first in `drawPac`, then in `movePac` | `DIRS[pac.dir]` came back nil on the radio only, right after the same lookup had worked; never reproduced off the radio | all direction tables replaced by `vec(dir)` / `opposite(dir)` functions built from `if`s |
 
 When the radio and the simulator disagree, believe the radio and code
 defensively around table lookups.
