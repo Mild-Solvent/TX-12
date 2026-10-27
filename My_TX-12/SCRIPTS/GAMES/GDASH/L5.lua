@@ -1,4 +1,4 @@
--- @Flip Side|Hard
+-- @Flip Side|Hard|Geometrical Dominator
 -- Geometry Dash level 5: rows bottom (ground) to top, tiles see GDASH/phys.lua
 -- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest
 -- rows are run-length coded: c*N = char c repeated byte(N)-32 times

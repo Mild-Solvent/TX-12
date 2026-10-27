@@ -1,4 +1,4 @@
--- @First Step|Easy
+-- @First Step|Easy|Stereo Madness
 -- Geometry Dash level 1: rows bottom (ground) to top, tiles see GDASH/phys.lua
 -- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest
 -- rows are run-length coded: c*N = char c repeated byte(N)-32 times

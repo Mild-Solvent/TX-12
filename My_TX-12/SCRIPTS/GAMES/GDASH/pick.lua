@@ -1,7 +1,7 @@
 -- Geometry Dash level picker, loaded only while the picker is shown (dropped while playing).
 --   nlev, pick = loadScript(this)()(best, tries)  counts the levels, reads gdash.dat into best/tries
 --   lv, prac, ip = pick(event, lv, prac, msg, ip) draws one frame (ip: 0 SA/SD, 1 THR stick)
-local stx, sty, str, hl, nm, df, ip = 0, 0, 0, -1, "", "", 0
+local stx, sty, str, hl, nm, df, tr, ip = 0, 0, 0, -1, "", "", "", 0
 
 return function(best, tries)
 -- levels are counted on the card: L1, L2, ... until one is missing (max 99)
@@ -46,15 +46,17 @@ return n, function(event, lv, prac, msg, ip)
   lv = lv + mv
   if lv < 1 then lv = n elseif lv > n then lv = 1 end
   -- name and difficulty: first line of the level file, "-- @Name|Difficulty"
+  -- or "-- @Name|Difficulty|Official level it is a tribute to"
   if hl ~= lv then
-    hl, nm, df = lv, "Level " .. lv, "?"
+    hl, nm, df, tr = lv, "Level " .. lv, "?", ""
     local ok, f = pcall(io.open, "/SCRIPTS/GAMES/GDASH/L" .. lv .. ".lua", "r")
     if ok and f then
       local ok2, s = pcall(io.read, f, 80)
       pcall(io.close, f)
-      local a, d = string.match(ok2 and type(s) == "string" and s or "", "^%-%- @([^|%c]*)|([^%c]*)")
+      local a, d, t = string.match(ok2 and type(s) == "string" and s or "", "^%-%- @([^|%c]*)|([^|%c]*)|?([^%c]*)")
       if a and a ~= "" then nm = a end
       if d and d ~= "" then df = d end
+      tr = t or ""
     end
   end
   local b = best[lv] or 0
@@ -68,7 +70,10 @@ return n, function(event, lv, prac, msg, ip)
   if b > 0 then lcd.drawFilledRectangle(3, 43, math.floor(b * 122 / 100), 2, FORCE) end
   if prac then lcd.drawText(2, 48, "PRACTICE (stick up/dn)", SMLSIZE)
   else lcd.drawText(2, 48, "NORMAL (stick up/dn)", SMLSIZE) end
-  lcd.drawText(2, 56, "L stick up or SA/SD", SMLSIZE)
+  -- bottom line: the start hint, taking turns with the tribute every 2 s
+  -- (long names go without "tribute: ", the line holds about 28 characters)
+  if tr ~= "" and getTime() % 400 < 200 then lcd.drawText(2, 56, #tr > 18 and tr or "tribute: " .. tr, SMLSIZE)
+  else lcd.drawText(2, 56, "L stick up or SA/SD", SMLSIZE) end
   return lv, prac, ip
 end, ip
 end
