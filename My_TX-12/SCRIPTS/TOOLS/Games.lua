@@ -63,15 +63,26 @@ local function scan()
   end
 end
 
+-- full collection, twice: the second pass frees what the first one's
+-- finalizers released
+local function clean()
+  collectgarbage("collect")
+  collectgarbage("collect")
+end
+
 local function init()
   sel, top = 1, 1
+  -- collect when the heap grows 10% (Lua's default waits until it doubles),
+  -- so garbage never piles up to twice the real use while a game runs
+  collectgarbage("setpause", 110)
   scan()
+  clean()
 end
 
 local function stopGame()
   if game then lastPeak, lastName = peak, game.name end
   game = nil
-  collectgarbage()
+  clean()
 end
 
 local function startGame(entry)
@@ -164,6 +175,7 @@ local function run(event)
   elseif event == EVT_VIRTUAL_PREV and #games > 0 then
     sel = (sel - 2) % #games + 1
   elseif event == EVT_VIRTUAL_ENTER and games[sel] then
+    clean()
     startGame(games[sel])
     if game then return 0 end
   end
