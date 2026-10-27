@@ -1,6 +1,8 @@
 # Level and song editors
 
 Three tools that run in your browser. Double-click the `.html` file to open it: no install, no internet needed.
+Keep the `radio/` folder next to `geodash-editor.html`: it holds the radio copy that the Radio tab and the
+performance strip use (`tools/gdash/sync-editor.js` refreshes it from `My_TX-12` after a game change).
 Your work is saved in the browser as a draft, but always **export** the file when you're done.
 
 | Editor | Makes | Goes on the SD card at |
@@ -38,8 +40,15 @@ So adding a level or song **never needs a change to the game**. Two rules:
 5. Press **Play-test** to try it (Space or the mouse button = SA, held as long as you hold it; Enter = a tap), then
    **Check beatable**. The solver searches taps and holds, says whether the level can be finished and marks
    presses and releases that need very exact timing (red = under 60 ms, too tight for the radio).
-6. **Download .lua** and name it with the next free number, e.g. `L9.lua`.
-7. Copy it to the card (see below).
+6. Look at the coloured **performance strip** under the level. Every column is measured with the game's real
+   drawing code: the number of screen drawing calls and Lua instructions one frame needs when that part is on
+   screen. Green is as light as the easy stock levels, yellow as busy as the hardest ones (L6-L8), red is heavier
+   than any stock level and can make the radio stutter: thin out those parts. Hover a column to see its numbers.
+7. Press the **Radio (real code)** tab to play the level on a copy of the radio: the game's own `.lua` files, the
+   TX12 screen pixel for pixel (same fonts), with the slow-LCD smear, and the radio's timing (20 frames a second).
+   What you see there is what the radio shows. Space = SA, Enter, Esc = RTN, Q/A = left stick up/down.
+8. **Download .lua** and name it with the next free number, e.g. `L9.lua`.
+9. Copy it to the card (see below).
 
 ### Tiles
 
