@@ -1,0 +1,18 @@
+# open Tools -> Games -> 12th entry (GeometryDash), start, play randomly, leave
+press SYS
+wait 300
+rot 6
+press ENTER
+wait 1500
+rot 11
+press ENTER
+wait 2500
+shot title
+press ENTER
+wait 1500
+fuzz 20000 1
+shot play
+press EXIT
+wait 1500
+shot launcher
+quit

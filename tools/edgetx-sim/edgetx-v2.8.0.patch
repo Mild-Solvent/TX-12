@@ -1,0 +1,118 @@
+diff --git a/radio/src/lua/interface.cpp b/radio/src/lua/interface.cpp
+index d05f06c..e868198 100644
+--- a/radio/src/lua/interface.cpp
++++ b/radio/src/lua/interface.cpp
+@@ -123,8 +123,40 @@ int custom_lua_atpanic(lua_State * L)
+   return 0;
+ }
+ 
++#if defined(SIMU)
++// simu-headless instrumentation: report Lua code running inside a C call
++// (a radio yield there fails with "attempt to yield across a C-call boundary")
++// and optionally yield after a fixed instruction budget to model the radio's CPU.
++#include "lstate.h"
++unsigned simuLuaCBoundaryHits = 0, simuLuaBudgetYields = 0, simuLuaMaxCycleInstr = 0, simuLuaBudget = 0;
++char simuLuaCBoundaryWhere[256] = "";
++static tmr10ms_t simuCycle = 0;
++static unsigned simuCycleInstr = 0;
++#endif
++
+ static void luaHook(lua_State * L, lua_Debug *ar)
+ {
++#if defined(SIMU)
++  if (ar->event == LUA_HOOKCALL) {
++    if (L->nny > 0 && lua_getinfo(L, "Sl", ar) && ar->what[0] == 'L') {
++      if (!simuLuaCBoundaryHits)
++        snprintf(simuLuaCBoundaryWhere, sizeof(simuLuaCBoundaryWhere), "%s:%d (Lua function called from C)", ar->short_src, ar->linedefined);
++      simuLuaCBoundaryHits++;
++    }
++    return;
++  }
++  if (ar->event == LUA_HOOKCOUNT) {
++    if (luaCycleStart != simuCycle) { simuCycle = luaCycleStart; simuCycleInstr = 0; }
++    simuCycleInstr += PERMANENT_SCRIPTS_MAX_INSTRUCTIONS;
++    if (simuCycleInstr > simuLuaMaxCycleInstr) simuLuaMaxCycleInstr = simuCycleInstr;
++    if (simuLuaBudget && simuCycleInstr >= simuLuaBudget) {
++      simuLuaBudgetYields++;
++      simuCycleInstr = 0;
++      lua_yield(lsScripts, 0);
++      return;
++    }
++  }
++#endif
+   if (ar->event == LUA_HOOKCOUNT) {
+     if (get_tmr10ms() - luaCycleStart >= LUA_TASK_PERIOD_TICKS) {
+       lua_yield(lsScripts, 0);
+@@ -1274,8 +1306,12 @@ void luaInit()
+ 
+ #if defined(LUA_ALLOCATOR_TRACER)
+       lua_sethook(L, luaHook, LUA_MASKCOUNT|LUA_MASKLINE, PERMANENT_SCRIPTS_MAX_INSTRUCTIONS);
++#else
++#if defined(SIMU)
++      lua_sethook(L, luaHook, LUA_MASKCOUNT|LUA_MASKCALL, PERMANENT_SCRIPTS_MAX_INSTRUCTIONS);
+ #else
+       lua_sethook(L, luaHook, LUA_MASKCOUNT, PERMANENT_SCRIPTS_MAX_INSTRUCTIONS);
++#endif
+ #endif
+ 
+       // lsScripts is now a coroutine in lieu of the main thread to support preemption
+diff --git a/radio/src/targets/simu/CMakeLists.txt b/radio/src/targets/simu/CMakeLists.txt
+index 56f7f38..a6e4569 100644
+--- a/radio/src/targets/simu/CMakeLists.txt
++++ b/radio/src/targets/simu/CMakeLists.txt
+@@ -137,6 +137,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNING_FLAGS}")
+ 
+ use_cxx11()  # ensure gnu++11 in CXX_FLAGS with CMake < 3.1
+ 
++# headless test rig (TX12 games project): firmware + command-driven inputs
++add_executable(simu-headless EXCLUDE_FROM_ALL ${SIMU_SRC} ${RADIO_SRC_DIR}/simu_headless.cpp)
++add_dependencies(simu-headless ${RADIO_DEPENDENCIES})
++target_link_libraries(simu-headless pthread)
++target_compile_definitions(simu-headless PUBLIC -DSIMU)
++
+ if(FOX_FOUND)
+   if(SIMU_DISKIO)
+     set(SIMU_SRC ${SIMU_SRC} ${FATFS_DIR}/FatFs/ff.c ${FATFS_DIR}/option/ccsbcs.c)
+diff --git a/radio/src/thirdparty/Lua/src/lauxlib.c b/radio/src/thirdparty/Lua/src/lauxlib.c
+index b8bcdda..8866ce8 100644
+--- a/radio/src/thirdparty/Lua/src/lauxlib.c
++++ b/radio/src/thirdparty/Lua/src/lauxlib.c
+@@ -954,8 +954,30 @@ LUALIB_API const char *luaL_gsub (lua_State *L, const char *s, const char *p,
+ }
+ 
+ 
++#if defined(SIMU)
++/* simu-headless: count the Lua heap and cap it like the radio's RAM */
++size_t simuLuaMem = 0, simuLuaMemPeak = 0, simuLuaMemCap = 0;
++unsigned simuLuaMemFail = 0;
++#endif
+ void *l_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
+   (void)ud; (void)osize;  /* not used */
++#if defined(SIMU)
++  size_t old = ptr ? osize : 0;
++  if (nsize == 0) {
++    if (ptr) { free(ptr); simuLuaMem -= old; }
++    return NULL;
++  }
++  if (simuLuaMemCap && nsize > old && simuLuaMem + (nsize - old) > simuLuaMemCap) {
++    simuLuaMemFail++;
++    return NULL;
++  }
++  void * p = realloc(ptr, nsize);
++  if (p) {
++    simuLuaMem = simuLuaMem - old + nsize;
++    if (simuLuaMem > simuLuaMemPeak) simuLuaMemPeak = simuLuaMem;
++  }
++  return p;
++#else
+   if (nsize == 0) {
+     if (ptr) {   // avoid a bunch of NULL pointer free calls
+       // TRACE_LUA_INTERNALS("free %p", ptr); FLUSH();
+@@ -965,6 +987,7 @@ void *l_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
+   }
+   else
+     return realloc(ptr, nsize);
++#endif
+ }
+ 
+ 
