@@ -25,9 +25,9 @@ on the bottom line: `-- @Home Base|Hard|Base After Base`.
 
 So adding a level or song **never needs a change to the game**. Two rules:
 
-- **Use the next free number.** There are 17 stock levels (`L1`–`L17`) and 5 stock songs (`s1`–`s5`), so your first
-  new level is `L18.lua` and your first new song is `s6.lua`.
-- **No gaps.** If you add `L19.lua` without `L18.lua`, the game stops counting at 17 and doesn't show L19.
+- **Use the next free number.** There are 22 stock levels (`L1`–`L22`) and 5 stock songs (`s1`–`s5`), so your first
+  new level is `L23.lua` and your first new song is `s6.lua`.
+- **No gaps.** If you add `L24.lua` without `L23.lua`, the game stops counting at 22 and doesn't show L24.
 
 ## Add a Geometry Dash level
 
@@ -50,7 +50,7 @@ So adding a level or song **never needs a change to the game**. Two rules:
 7. Press the **Radio (real code)** tab to play the level on a copy of the radio: the game's own `.lua` files, the
    TX12 screen pixel for pixel (same fonts), with the slow-LCD smear, and the radio's timing (20 frames a second).
    What you see there is what the radio shows. Space = SA, Enter, Esc = RTN, Q/A = left stick up/down.
-8. **Download .lua** and name it with the next free number, e.g. `L18.lua`.
+8. **Download .lua** and name it with the next free number, e.g. `L23.lua`.
 9. Copy it to the card (see below).
 
 ### Tiles
