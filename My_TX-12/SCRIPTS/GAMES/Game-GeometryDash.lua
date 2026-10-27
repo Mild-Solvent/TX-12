@@ -173,7 +173,13 @@ local function run(event)
     end
     if state == "play" then
       music(mt)
+      -- EdgeTX runs this at a fixed 20 Hz (50 ms), so frames alternate 2 and 3
+      -- physics steps and the level would jump 3.6 / 5.4 px (seen as doubled
+      -- edges on the slow LCD). Drawing the leftover half step keeps it steady.
+      a = P.x
+      P.x = a + acc * P.spd * 0.01
       draw(P, nil, false, s, pct(), (tries[lv] or 0) + 1)
+      P.x = a
       return 0
     end
   end
