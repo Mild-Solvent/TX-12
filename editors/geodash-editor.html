@@ -131,6 +131,7 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
 
 <nav id="tabs">
   <button data-tab="play" class="on">Play-test</button>
+  <button data-tab="radio" title="Play the level with the real game code at the radio's 20 frames per second">Radio (real code)</button>
   <button data-tab="solve">Check beatable</button>
   <button data-tab="music">Music</button>
   <button data-tab="export">Export</button>
@@ -156,6 +157,39 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
       <div class="note">Same physics as <code>GDASH/phys.lua</code>: fixed 20 ms steps, a press is remembered for 120 ms, holding in cube/ball/robot mode jumps again on every landing.
       Practice: <span class="kbd">C</span> = checkpoint (max 15, like the radio), <span class="kbd">X</span> = remove last. <span class="kbd">R</span> = restart, <span class="kbd">Esc</span> = stop.
       Deaths are marked with a red &times; in the editor. The SA lamp shows when the button is held.</div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="p-radio">
+  <div class="cols">
+    <div>
+      <canvas id="rc" class="lcd" width="512" height="256" tabindex="0"></canvas>
+      <div class="bar" style="margin-top:6px">
+        <button id="rStart" title="Load this level into the game and play it">Play on the radio</button>
+        <button id="rStop">Stop</button>
+        <label title="The TX12's LCD pixels fade slowly: moving things leave a trail">
+          <input id="rSmear" type="checkbox" checked> LCD smear</label>
+        <label><input id="rSound" type="checkbox" checked> sound</label>
+        <span id="rLamp" class="lamp" title="SA held">SA</span>
+        <span class="lamp" id="rThrV" title="Left stick (throttle): Q up, A down, Z to the bottom">THR -100%</span>
+      </div>
+      <canvas id="rGraph" width="512" height="70" style="margin-top:6px;background:#15181c;border:1px solid var(--line);border-radius:4px"></canvas>
+      <div id="rMeter" style="color:var(--dim)"></div>
+    </div>
+    <div style="max-width:460px">
+      <div class="note" id="rInfo">Runs the game itself: <code>Game-GeometryDash.lua</code> and <code>GDASH/*.lua</code> from the card
+        (copied in by <code>tools/gdash/sync-editor.js</code>), with this level as level 1, on a copy of the TX12 screen
+        (same fonts and pixels as EdgeTX 2.8) and the radio's timing: one frame every 50 ms.</div>
+      <div class="note"><span class="kbd">Space</span> / <span class="kbd">&uarr;</span> / <span class="kbd">W</span> = <b>SA</b> (hold),
+        <span class="kbd">Enter</span> = ENTER, <span class="kbd">Esc</span> = RTN (back to the level picker, again = quit),
+        <span class="kbd">&larr;</span>/<span class="kbd">&rarr;</span> = scroll wheel.
+        Left stick (throttle): <span class="kbd">Q</span> up, <span class="kbd">A</span> down, <span class="kbd">Z</span> back to the bottom.</div>
+      <div class="note">The graph shows each frame's <b>draw calls</b> (orange) and <b>Lua instructions</b> (blue, &divide;100).
+        The coloured strip under the level in the editor shows the same for every screen of the level:
+        <span class="ok">green</span> like the easy stock levels, <span class="warn">yellow</span> as busy as the hardest ones,
+        <span class="bad">red</span> heavier than any stock level (more than 160 draw calls or 17000 instructions for one screen):
+        thin those parts out.</div>
     </div>
   </div>
 </section>
@@ -292,6 +326,13 @@ dialog::backdrop { background: rgba(0,0,0,.5); }
      Plain JavaScript, no DOM. Node can load it:
        vm.runInNewContext(<this script's text>, {module:{exports:{}}})
      ============================================================ -->
+<!-- Radio tab and performance meter: the real game code on an emulated TX12 screen.
+     Missing files (only the .html copied) just disable those two features. -->
+<script src="radio/fengari-web.js"></script>
+<script src="radio/tx12-lcd.js"></script>
+<script src="radio/tx12-radio.js"></script>
+<script src="radio/gd-measure.js"></script>
+<script src="radio/gdash-files.js"></script>
 <script id="gd-core">
 "use strict";
 var GD = (function () {
@@ -1165,7 +1206,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   var BUNDLED = /*BUNDLED*/{"1":"-- @First Step|Easy\n-- Geometry Dash level 1: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".*<^.*'^.*'^^.*'()##[].*)##.*&##.**##.*&#*$.*&^^.*%#*(.**p.*$^*,.*&^.*'^^.*&^.*.##...##...##^*$.*)^^.*.S.*5##.**##.**##.**##.**##.*,C.*2^*'.*)^*'.*'^*'.*7###^*$###^^^###^*$###^^^###^^^.*'^.*'p.^^^.*%p.^^^.*%p.^*$.*,^^.*&S.*)##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*&C.*+^*'.*&^*'.*)###.*$###^^^###^^^###^*$.*'^^...##...^^.*$##..^^...#*&^*$.*9\",\n\".*l##.**##.*<###.*.#**.*M##...##.*S##.**##.**##.**##.*8g.*u###...###.*$###.*z##.*(##.*(##.*(##.*(##.*(##.*0g.*O###...###...###.*0##.*)##.*'#*&\",\n\".*~.*~.*'##.*S##.**##.**##.**##.*No.*/o.*-o.*G###.*~.*-##.*(##.*(##.*So.*,o.*?###.*H##\",\n\".*~.*~.*P##.*B##\",\n\".*~.*~.*P##.*B##.*6##\",\n\".*~.*~.*P##.*B##.*6##.*~.*~.*&##.*d##\",\n\".*~.*~.*P##.**##.**##.*6##.**##.*~.*~.*&##.*(##.*F##.*(##.*(##\",\n\".*~.*~.*P##.**##.**##.*6##.**##.*~.*~.*&##.*(##.*(##.*(##.*(##.*(##.*(##.*(##\",\n\".*~.*~.*P##.**##.**##.*6##.**##.*~.*~.*&##.*(##.*(##.*(##.*(##.*(##.*(##.*(##\",\nu = 0.0889,\nm = \"C42 G42 E52 G42 C52 G42 E52 G42 B32 G42 D52 G42 B42 G42 D52 G42 A32 E42 C52 E42 A42 E42 C52 E42 F32 C42 A42 C42 F42 C42 A42 C52 E54 D52 C52 D54 G44 E52 F52 G54 E54 R4 C54 D52 E52 D54 B34 C58 R4 G44 E54 D52 C52 D54 G44 A52 G52 F52 E52 D54 R4 F54 E52 D52 C54 B34 C58 R8 G42 A42 B42 C52 D52 E52 F52 G52 G51 G51 G51 G51 A51 A51 B51 B51 C62 R2 C62 R2 C64 B52 G52 E54 G54 A54 G52 E52 D58 C64 B52 G52 E54 C54 D54 E52 F52 G58 A54 B52 C62 B54 G54 C68 R4 G44 A44 C52 E52 A54 G54 F54 E52 D52 C58 E54 G52 C62 B54 G54 D58 B34 D54 A44 C52 E52 A54 B54 C64 B52 A52 F58 G54 E52 C52 E54 G54 G58 R4 D54 C52 C52 E52 E52 G52 G52 C62 C62 D61 D61 D61 D61 E61 E61 E61 E61 G62 G62 B62 R2 C51 E51 G51 C61 G51 E51 C51 E51 G42 C52 E52 G52 B41 D51 G51 B51 G51 D51 B41 D51 G42 B42 D52 G52 A41 C51 E51 A51 E51 C51 A41 C51 E42 A42 C52 E52 F41 A41 C51 F51 C51 A41 F41 A41 C52 F52 A52 C62 C51 E51 G51 C61 E61 C61 G51 E51 D51 G51 B51 D61 G61 D61 B51 G51 C62 G52 E52 C52 G52 E52 C64 C64 B52 G52 E54 G54 A54 G52 E52 D58 C64 B52 G52 E54 C54 D54 E52 F52 G58 A54 B52 C62 B54 G54 C68 R4 G44 C64 G54 E54 C54 C58 R8\"\n}\n","2":"-- @Back Beat|Easy\n-- Geometry Dash level 2: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".*4^.*%^.*)^^.*.^.*%^.*)/#`.*%##.*(^*<.*(^.*'^^.*&^.*'S.*)###.*+###.*+###.*+###.*+###.*/C.*-p.^*$.*)^*'.*&^*1.*+p...#*$.**^^.*(^.*)S.*'##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*$C.*1###^^^###^^^###^^^###.*'^*(.*&===...^.*&^.*%^^.*&^.*'##.*+S.*)##.**##.**##.*2C.*+p.^*(.*&p.^*(.**###^^^###^^^###^^^.*(^.*)^^.*B\",\n\".*u=*%.*+=*%.*`###.*+###.*+###.*+###.*/g.*i#*$.*P##.*(##.*(##.*(##.*(##.*(##.*.g.*7###...###.*~...##.*>g.*O###...###...###\",\n\".*}=*%.*+=*$.*u###.*]o.*,o.*$o.*$o.*z##.*(##.*so.*~.*Co.*/o\",\n\"\",\n\".*~.*~.*~.*~.*~.*~.*,##\",\n\".*~.*^###.*~.*~.*~.*~.*%##.*6##.**##\",\n\".*~.*^###.*+###.*+###.*9###.*~.*E##.*d##.*~.*<##.**##.**##.**##\",\n\".*~.*^###.*+###.*+###.*+###.*+###.*~.*E##.*(##.*(##.*<##.*(##.*(##.*~.*<##.**##.**##.**##\",\n\".*~.*^###.*+###.*+###.*+###.*+###.*~.*E##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*<##.**##.**##.**##\",\nu = 0.0889,\nm = \"A32 R2 A42 R2 A32 R2 E42 R2 A32 R2 A42 R2 C42 R2 E42 R2 F32 R2 F42 R2 G32 R2 G42 R2 E32 R2 E42 R2 G#32 R2 B32 R2 A43 A43 A42 C52 A42 E52 A42 F43 F43 F42 A42 F42 C52 F42 G43 G43 G42 B42 G42 D52 G42 E43 E43 E42 G#42 E42 B42 E42 A43 A43 A42 C52 A42 E52 A42 A53 A53 G52 E53 E53 D52 C53 C53 D52 E54 R4 A53 A53 G52 E53 E53 G52 B54 G#54 E58 B53 A53 G52 E54 D54 E58 R8 E52 A52 C62 B52 A54 E54 F52 A52 C62 A52 F58 G52 B52 D62 C62 B54 G54 E54 G#54 B54 E64 A42 C52 E52 A52 G52 E52 C52 E52 E42 G#42 B42 E52 R8 A51 C61 E61 A51 C61 E61 A51 C61 E62 C62 A52 E52 F51 A51 C61 F51 A51 C61 F51 A51 C62 A52 F52 C52 G51 B51 D61 G51 B51 D61 G51 B51 D62 B52 G52 D52 E51 G#51 B51 E51 G#51 B51 E51 G#51 B52 G#52 E52 B42 A51 C61 E61 A51 C61 E61 A51 C61 E62 C62 A52 E52 E61 D61 C61 B51 A51 G#51 A51 B51 A58 A43 A43 A42 C52 A42 E52 A42 F43 F43 F42 A42 F42 C52 F42 G43 G43 G42 B42 G42 D52 G42 E43 E43 E42 G#42 E42 B42 E42 F43 F43 F42 A42 F42 C52 F42 E43 E43 E42 G#42 E42 B42 E42 C53 C53 B52 G54 E54 A53 A53 G52 E58 D53 D53 E52 F54 A54 G#54 E54 B44 E54 A53 A53 G52 E53 E53 D52 C53 C53 D52 E54 R4 A53 A53 G52 E53 E53 D52 C53 D53 E52 A54 C64 B53 A53 G52 E54 D54 E58 R8 A42 E42 A52 R2 A68\"\n}\n","3":"-- @Pad Jumper|Normal\n-- Geometry Dash level 3: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".*6^.*-k.^^.**p.*$#*&^^^.*2k.^...p.^*$.*$S.*)##.*)###.*)##.*)#*$.*)##.*)###.*)##.*&C.*)G.*Cg.*'p...G.*3g.*)^^.*.B.*%^^^.*-^^^.*-^^^.*-^^^.*-^^^.*-C.*)U.*%^*&##^**##^*(##^**##^**##^*(##^**##^*$.*$C.*)^*%.*(^*..*-p...###^^^.*$^.*'^^.*&^.*5S.*'##.*(##.*(##.*(##.**B.*'^^^.*-^^^.*-C.*'^.*'p..G.*/g.*)^.*%k.^^.*(^^.*C\",\n\".*W#*&.*O##.*)###.*)##.*)#*$.*)##.*)###.*)##.*&g.*~.*~.g.*A##.*4##.**##.*(##.**##.*(g.*U###.*U##.*2##.*(##.*Rg\",\n\".*~.*E##.*)#*$.*)##.*~.*~.*w##.**##.*4##.*5i.*+o...o...o.*~..##\",\n\"\",\n\".*~.*~.*~.*~.*~.*~.*@##\",\n\".*~.*~.*2v.*'vv.*(v.*=vv.*Pvvv.*-vvv.*-vvv.*-vvv.*-vvv.*~.*~.*;##.*(##.*2##.*:vvv.*-vvv.*?vv\",\n\".*~.*~.*$#*~#*~#*$.*.##.**##.*(##.*~.*f##.*(##.*(##.*(##.*&#*~#*B\",\n\".*~.*.##.*)###.*L###.*)##.*~.*~.*>##.**##.*(##.**##.*4##.**##.*~.*8##.*(##.*(##.*(##\",\n\".*~.*.##.*)###.*)##.*)#*$.*)##.*)###.*)##.*~.*~.*>##.**##.*(##.**##.**##.*(##.**##.*~.*8##.*(##.*(##.*(##\",\n\".*~.*.##.*)###.*)##.*)#*$.*)##.*)###.*)##.*~.*~.*>##.**##.*(##.**##.**##.*(##.**##.*~.*8##.*(##.*(##.*(##\",\nu = 0.0889,\nm = \"D42 R2 F42 A42 D52 R2 A42 F42 A#32 R2 D42 F42 A#42 R2 F42 D42 C42 R2 E42 G42 C52 R2 G42 E42 A32 R2 C#42 E42 A42 R2 E42 C#42 D42 R2 F42 A42 D52 R2 A42 F42 A32 R2 C#42 E42 A42 R2 E42 C#42 D54 F52 A52 D64 C64 A#54 A52 G52 F58 G54 A52 A#52 C64 A54 A58 R4 E54 D54 F52 A52 D64 E64 F62 E62 D62 C62 D68 D62 R2 D62 C62 A54 F54 A#52 R2 A#52 A52 G54 F54 C62 R2 C62 A#52 A54 G54 A52 C#62 E62 A62 G64 E64 D62 R2 D62 F62 E54 D54 C#62 E62 A52 C#62 D68 D51 R1 D51 R1 F52 A52 D61 R1 D61 R1 C62 A52 A#51 R1 A#51 R1 D62 F62 A#51 R1 A51 R1 G52 F52 C61 R1 C61 R1 E62 G62 C61 R1 A#51 R1 A52 G52 A51 R1 A51 R1 C#62 E62 A61 R1 G61 R1 E62 C#62 D51 R1 D51 R1 F52 A52 D61 R1 D61 R1 C62 A52 F62 E62 D62 C#62 D68 D51 F51 A51 D61 A51 F51 D51 F51 A52 D62 F62 A52 A#41 D51 F51 A#51 F51 D51 A#41 D51 F52 A#52 D62 F52 C51 E51 G51 C61 G51 E51 C51 E51 G52 C62 E62 G52 A41 C#51 E51 A51 E51 C#51 A41 C#51 E52 A52 C#62 E62 D51 F51 A51 D61 A51 F51 D51 F51 A52 D62 F62 A52 D61 C61 A#51 A51 G51 F51 E51 C#51 D58 D62 R2 D62 C62 A54 F54 A#52 R2 A#52 A52 G54 F54 C62 R2 C62 A#52 A54 G54 A52 C#62 E62 A62 G64 E64 D62 R2 D62 F62 E54 D54 C#62 E62 A52 C#62 D68 F54 A54 C64 A54 A#54 D64 F64 D64 C64 E64 G64 E64 A58 C#68 D64 F64 A64 F64 E64 C#64 A54 E54 D62 R2 D62 C62 A54 F54 A#52 R2 A#52 A52 G54 F54 D62 R2 D62 F62 E54 D54 C#62 E62 A52 C#62 D68 D52 A42 D52 R2 D68 D44 A34 D48\"\n}\n","4":"-- @Orbit|Normal\n-- Geometry Dash level 4: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".*>^*'.*(^*%.**^*5.*)^.*+^.*)^^.*(U.*%^*$##^**##^*4##^**##^*(##^*1.*%C.*'G.*Mg.*'k.^.*)G.*1g.*)B.*%^^^.*-^^^.*)^^^.*-^^^.*-^^^.*1C.*)S.*'##.*(##.*(##.*(###.*(##.*(##.*(##.*(##.*'C.*)k.^.*'p..^*,.*/^*..*,^.*)^^.*0U.*%^*$##^**##^*(##^*%.G.*Cg.^*$##^^^...C.*)^*'.*'G.*9g.*'p.^*$.**^^.*8\",\n\".*~.*R##.*4##.**##.*(##.*6g.*~.*}g.*1##.*(##.*(##.*(###.*(##.*(##.*(##.*(##.*'g.*8#*&.*~.##.*Z##.*&g\",\n\".*Ao.*-i.*/o.*$o.*$o.*$o.*w##.*4##.*~.*~.*f###.*(##.*(##.*oo...i...o.*~.*To\",\n\".*~.*~.*ao.*~.*~.*zo.*~.*A##.*fi\",\n\".*~.*[.##.*~.*~.*~.*~.*~.*8##.*(##.*(##\",\n\".*~.*[.##.*L##.*<v.*)vv.*(v*'.*Gvv.*>vvv.*+vvv.*+vvv.*-vvv.*-vvv.*~.*~.*cv*$##v*(##v*(##v*%.*Ovv...v*'\",\n\".*~.*F##.**##.*(##.*6##.*4##.*.#*~#*~#*$.*~..#*~#*~#*x\",\n\".*~.*F##.**##.*(##.**##.**##.*(##.**##.*~.*~.*<##.*(##.*(##.*G##.*(##.*~.*;##.**##.*(##.*.##.*(##.*(##.*,##\",\n\".*~.*F##.**##.*(##.**##.**##.*(##.**##.*~.*~.*<##.*(##.*(##.*(###.*(##.*(##.*(##.*(##.*~.*;##.**##.*(##.*.##.*(##.*(##.*,##\",\n\".*~.*F##.**##.*(##.**##.**##.*(##.**##.*~.*~.*<##.*(##.*(##.*(###.*(##.*(##.*(##.*(##.*~.*;##.**##.*(##.*.##.*(##.*(##.*,##\",\nu = 0.0889,\nm = \"E44 E54 B54 E44 E54 B54 E44 E54 B54 C44 C54 G54 D44 D54 A54 B34 B44 F#54 E44 E54 B54 C44 C54 G54 D44 D54 A54 B34 B44 F#54 G54 F#52 E54 B42 C54 B42 A44 R2 D54 C52 B44 A42 B48 R4 G54 A52 B54 E62 D64 C62 B44 A42 G54 F#52 E54 D#52 E68 R4 E54 E64 B64 C54 C64 G64 D54 D64 A64 B44 B54 F#64 E54 E64 B64 C54 C64 G64 D54 D64 A64 B44 B54 F#64 E52 R2 G52 R2 B52 R2 C52 R2 E52 R2 G52 R2 D52 R2 F#52 R2 A52 R2 B42 R2 D#52 R2 F#52 R2 E52 R2 G52 R2 B52 R2 C52 R2 E52 R2 G52 R2 D52 R2 F#52 R2 A52 R2 B42 R2 D#52 R2 F#52 R2 E51 G51 B51 E61 B51 G51 E51 G51 B51 E61 G61 B61 C51 E51 G51 C61 G51 E51 C51 E51 G51 C61 E61 G61 D51 F#51 A51 D61 A51 F#51 D51 F#51 A51 D61 F#61 A61 B41 D#51 F#51 B51 F#51 D#51 B41 D#51 F#51 B51 D#61 F#61 E51 G51 B51 E61 B51 G51 E51 G51 B51 E61 G61 B61 C51 E51 G51 C61 G51 E51 C51 E51 G51 C61 E61 G61 B41 D#51 F#51 B51 F#51 D#51 B41 D#51 F#51 B51 D#61 F#61 E61 D#61 E61 B51 G51 E51 B42 E64 G54 F#52 E54 B42 C54 B42 A44 R2 D54 C52 B44 A42 B48 R4 G54 A52 B54 E62 D64 C62 B44 A42 G54 F#52 E54 D#52 E68 R4 E44 E54 B54 C44 C54 G54 D44 D54 A54 B34 B44 F#54 E54 E64 B64 C54 C64 G64 D54 D64 A64 B44 B54 F#64 G54 F#52 E54 B42 C54 B42 A44 R2 D54 C52 B44 A42 B48 R4 G54 A52 B54 E62 D64 C62 B44 A42 E68 R4 E44 B34 E54\"\n}\n","5":"-- @Flip Side|Hard\n-- Geometry Dash level 5: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".*6^.*'G.*Eu.*7^^.*4W.*'^.*)^.*)^.*)^.*A^.*)^.*'C.**^^^.*(^*%.*7u.*7^^^.*)^.*/R.*%^.*%^^.*&##.*&#*%.*%#*%^*$.*'^*%.*)^^.*(^.*'##.*(S.*)##.**##.*$G.*%##.**##.**##.*$g.*%##.**##.*'C.*$W.*'^.*'^.*)m.*'^.*%^.*%^.*9n.*%^.*&^.*&C...B.*%^^^.*-###.*)^^^.*-^^^.*)^^^.*5C.*)m.*'^.*+^.*$^.*$G.*:g.*)^.*&^.*'n.*1p...G.*D^^^.*-^^.*(^.*6\",\n\".*~.*4g.*yg.*~.*'g.*;#*%.*%#*%.*Ug.*)##.**##.**##.**##.**##.*6##.*'g.*$g.*{g.*yg.*3#*(\",\n\".*~.*~.*~.*^#*%.*w##.**##\",\n\".*Tq.*?q.*~.*Ge.*7q.*;q.*~.*~.*~.*~.*~.*kq\",\n\"\",\n\".*Fv.*+v*(.*8v*(.*jv.*)v.*Yvvv.*%v*'.*6v*&.*~.*~.*)##.*nv.*%v.*%v.*Kvvv.*-vvv.*)vvv.*-vvv.*)vvv.*[v.*'v.*evv.*(v*(\",\n\".*0#*~#*~#*~#*&.*~.*.##.**##.*B##.**##.**##.**#*~#*~#*~#*v\",\n\".*~.*~.*~.*~.*8#*~##\",\n\".*~.*~.*~.*~.*D##.**##.**##.**##.**##.**##.**##\",\nu = 0.0889,\nm = \"F#32 R2 F#42 R2 F#32 R2 C#42 R2 F#44 F#54 C#64 F#54 D44 D54 A54 D54 E44 E54 B54 E54 C#44 C#54 G#54 C#54 F#44 F#54 C#64 F#54 D44 D54 A54 D54 F#54 A52 C#62 B54 A54 F#54 E52 D52 A44 R4 E54 G#52 B52 C#64 B54 G#58 F54 C#54 F#54 A52 C#62 F#64 E64 D64 C#62 B52 A54 F#54 F#44 F#54 C#64 F#54 D44 D54 A54 D54 E44 E54 B54 E54 C#44 C#54 G#54 C#54 F#44 F#54 C#64 F#54 C#44 C#54 G#54 C#54 F#44 F#54 C#64 F#54 D44 D54 A54 D54 E44 E54 B54 E54 C#44 C#54 G#54 C#54 F#44 F#54 C#64 F#54 C#44 C#54 G#54 C#54 F#54 A52 C#62 B54 A54 F#54 E52 D52 A44 R4 E54 G#52 B52 C#64 B54 G#58 F54 C#54 E54 F#52 G#52 A54 B54 F#58 R8 F#51 A51 C#61 F#61 C#61 A51 F#51 A51 C#62 F#62 A62 F#62 D51 F#51 A51 D61 A51 F#51 D51 F#51 A52 D62 F#62 D62 E51 G#51 B51 E61 B51 G#51 E51 G#51 B52 E62 G#62 E62 C#51 F51 G#51 C#61 G#51 F51 C#51 F51 G#52 C#62 F62 G#62 F#51 A51 C#61 F#61 C#61 A51 F#51 A51 C#62 F#62 A62 F#62 F#61 E61 C#61 B51 A51 G#51 F51 C#51 F#58 F#44 F#54 C#64 F#54 D44 D54 A54 D54 E44 E54 B54 E54 C#44 C#54 G#54 C#54 E44 E54 B54 E54 C#44 C#54 G#54 C#54 F#54 A52 C#62 B54 A54 F#54 E52 D52 A44 R4 F#54 A52 C#62 F#64 E64 D64 C#62 B52 A54 F#54 E54 F#52 G#52 A54 B54 F#58 R8 F#51 A51 C#61 F#61 C#61 A51 F#51 A51 C#62 F#62 A62 F#62 D51 F#51 A51 D61 A51 F#51 D51 F#51 A52 D62 F#62 D62 E51 G#51 B51 E61 B51 G#51 E51 G#51 B52 E62 G#62 E62 C#51 F51 G#51 C#61 G#51 F51 C#51 F51 G#52 C#62 F62 G#62 F#62 C#62 A52 F#52 C#68 F#44 C#44 F#58\"\n}\n","6":"-- @Saucer|Harder\n-- Geometry Dash level 6: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\"..3.*5^.*)^^.*)^^^.*&##.*(###.*)^^^.*(#.*(^.*1U.*%^*&##^**##^**##^**##^**##^**##^**##^**##^**##^*'.*%X.*+^^^.*-^^^.*-^^^.*-^^^.*-^^^.*7Z.*%^*&##^**##^**##^**##^**##^**##^**##^*%.C.*%D.*'^.*)^^.*)^.*(^^^.*+^.*'^^.*8d.*&4..U.*%^*&##^*,##^*,##^*,##^*,##^*,##^*,##^*1...C.3.*%B.*1T.^*<.*4^^^.*+C.*-DU.*$^*$##^**##^*(##^**##^**##^**##^*'.*%d...C.*)R.*%^.*+##.*(^^^...2.*'#*$^*%.*'4.*%^.*)^^.**3.C.*'Z...^*&##^**##^**##^**##^*)...S.*'##.**##.**##.**##.*,C.*G\",\n\".*V##.*(###.*g##.*6##.**##.**##.**##.**##.**##.*~.*L##.*B##.*6##.*&g.*~.*A##.*,##.*,##.*,##.*,##.*,##.*4g.*yg.*7##.**##.*(##.**##.**##.**##.*0g.*;##.*6#*$.*Jg.*=##.*6##.*,g.*'##.**##.**##.**##.*,g\",\n\".*~.*L##.*6##.**##.**##.**##.**##.*~.*~.*~.*`##.*,##.*:##.*,##.*,##.*N#*1.*s##.*(##.**##.**##.**##.*~.*~.*:##.**##\",\n\".*~.*d##.*6##.*6##.*~.*~.*~.*`##.*H##.*jt.*~.*%##.*4##.*6##\",\n\".*~.*d##.*6##.*6##.*~.*p##.*6##.*~.*~##.*F##\",\n\".*~.*X##.*~.**vvv.*-vvv.*-vvv.*-vvv.*-vvv.*5v*&##v**##v**##v**##v*6##v**##v*%.*~.*~.*7##.*dv*%.*1vvv.*~.*~.*;v*&##v**##v**##v**##v*)\",\n\".*~.*@##.*6##.*x#*~#*~#*$.*~.*2##.*H##.*T##.*.#*~##.*~.*~.*$#*[#.**##.**##\",\n\".*~.*@##.**##.**##.*N##.*6##.*~.*@##.**##.**##.**##.**##.**##.**##.*~.*:##.*,##.*,##.*,##.*H##.**##.*~.*~.*~.*@##.**##.**##.**##.**#*d\",\n\".*~.*@##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*@##.**##.**##.**##.**##.**##.**##.*~.*:##.*,##.*,##.*,##.*,##.*,##.*,##.**##.*~.*H##.*4##.*6##.*~.*F##.**##.**##.**##.*4##.**##.**##.**##\",\n\".*~.*@##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*@##.**##.**##.**##.**##.**##.**##.*~.*:##.*,##.*,##.*,##.*,##.*,##.*,##.**##.*~.*H##.*(##.**##.**##.**##.*~.*F##.**##.**##.**##.*4##.**##.**##.**##\",\n\".*~.*@##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*@##.**##.**##.**##.**##.**##.**##.*~.*:##.*,##.*,##.*,##.*,##.*,##.*,##.**##.*~.*<##.**##.*(##.**##.**##.**##.*~.*F##.**##.**##.**##.*4##.**##.**##.**##\",\n\".*~.*@##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*@##.**##.**##.**##.**##.**##.**##.*4v.*)vv.*)v.*(vvv.*+v.*'vv.*N##.*,##.*,##.*,##.*,##.*,##.*,##.**##.*~.*8v*$##v**##v*(##v**##v**##v**##v*'.*~.*?##.**##.**##.**##.*4##.**##.**##.**##\",\nu = 0.14545,\nm = \"G34 R4 G32 G42 D52 G42 D#32 D#42 A#42 D#42 F32 F42 C52 F42 D32 D42 A42 D42 G32 G42 D52 G42 D#32 D#42 A#42 D#42 G42 A#42 D52 C52 A#42 A42 G44 D#42 G42 A#42 D52 D54 C52 A#42 F42 A42 C52 D#52 D52 C52 A#42 A42 G42 A#42 A42 F#42 G44 R4 G32 G42 D52 G42 D#32 D#42 A#42 D#42 F32 F42 C52 F42 D32 D42 A42 D42 G32 G42 D52 G42 D32 D42 A42 D42 G52 R1 G51 A#52 D62 D#62 D62 A#52 G52 F52 R1 F51 A52 C62 D62 C62 A52 F#52 G52 R1 G51 A#52 D62 D64 R4 G42 A#42 D52 C52 A#42 A42 G44 D#42 G42 A#42 D52 D54 C52 A#42 G42 A#42 A42 F#42 G44 R4 G41 A#41 D51 G51 D51 A#41 G41 D51 D#41 G41 A#41 D#51 A#41 G41 D#41 G41 F41 A41 C51 F51 C51 A41 F41 A41 D41 F#41 A41 D51 F#51 D51 A41 F#41 G41 A#41 D51 G51 D51 A#41 G41 D51 D#41 G41 A#41 D#51 A#41 G41 D#41 G41 F41 A41 C51 F51 C51 A41 F41 A41 D41 F#41 A41 D51 F#51 D51 A41 F#41 G32 G42 D52 G42 D#32 D#42 A#42 D#42 F32 F42 C52 F42 D32 D42 A42 D42 F32 F42 C52 F42 D32 D42 A42 D42 G52 R1 G51 A#52 D62 D#62 D62 A#52 G52 F52 R1 F51 A52 C62 D62 C62 A52 F#52 F52 R1 F51 A52 C62 D62 C62 A52 F#52 G42 A#42 D52 C52 A#42 A42 G44 F42 A42 C52 D#52 D52 C52 A#42 A42 G42 A#42 A42 F#42 G44 R4 G41 A#41 D51 G51 D51 A#41 G41 D51 D#41 G41 A#41 D#51 A#41 G41 D#41 G41 F41 A41 C51 F51 C51 A41 F41 A41 D41 F#41 A41 D51 F#51 D51 A41 F#41 G41 A#41 D51 G51 D51 A#41 G41 D51 D#41 G41 A#41 D#51 A#41 G41 D#41 G41 D41 F#41 A41 D51 F#51 D51 A41 F#41 G52 D52 G44 G34 D34 G38\"\n}\n","7":"-- @Overdrive|Insane\n-- Geometry Dash level 7: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".4.*6^^.**^^^.*(^.*(##.**###^^^.*&^.*)^^^.**^^.*)S.*)##.**##.**##.**##.**##.**##.**##.**##.**##.*,C.*&3Wm.*,#.*%#.*%#.*+#.*%#.*+#.*%#.*%#.*%#.*-n.C.4...B...^^^.*-^^^.*-^^^.*'X.*%^^^.*-^^^.*3C.*%DW.*,##.**##.**##.**##.**##.**##.**##.**##.**##.dC.*1f.^*$.*,^*-.*A^^^.*)^.*.mU...^*&##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*%.n.C.*%R.*%^.*)^^.**##.*(#*%^*$.*)^*%.*)##.**^.*-Z...^*&##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*'...C.*-T.^*9.*+T.^*5.*/^.**3X...^^^.*)^^^.*)^^^.*)^^^...Z...^*$##^*(##^*(##^*(##^*%.C4..W.*'#.*/#.*/#.*'#.*'#.*%m.*)#.*%#.*%#.*+#.*%#.*'n.*'C.*/^*,.*(p.G.*9^^^.*+^^.**^.*M\",\n\".*X##.**###.*Kg.*)##.**##.**##.**##.**##.**##.**##.**##.**##.*,g.*5#.*+#.*+#.*%#.*+#.*+#.*%#.*/g.*~.g.*3##.**##.**##.**##.**##.**##.**##.**##.**##..g.*~.*C##.*(##.*(##.*(##.*(##.*(##.*(##.*(g.*A##.*(#*%.*;##.*L##.*2##.*2##.*2##.*2##.*4g.*~.*g##.*2##.*&g...g.*'#.*/#.*/#.*/#.*/#.*+#.*+#.*%#.*/g\",\n\".*~.*J##.**##.**##.**##.**##.**##.**##.**##.*<#.*%#.*+#.*%#.*%#.*+#.*%#.*+#.*+#.*~.*9##.**##.**##.**##.**##.**##.**##.**##.**##.*Pr.*y##.*2##.*(##.*(##.*h#*%.*~.*~.#*5.*~.*m#.*?#.*/#.*)#.*%#.*+#.*%#.*%#.*Ko\",\n\".*~.*V##.**##.**##.**##.**##.**##.*H#.*%#.*%#.*+#.*%#.*+#.*+#.*%#.*+#.*~.*~.*~.e.*-q.*m##.*(##.*(##.*~.*~.*nt.*E#*3.*~.*Q#.*/#.*A#.*%#.*%#.*+#.*%#.*iq\",\n\".*~.*b##.**##.**##.**##.*T#.*+#.*+#.*+#.*%#.*+#.*+#.*%#.*~.*~.*~.*~.*)##.*~.*l##.*2##.*F##.*rt.*)^.*~.*3##.*D#.*/#.*/#.*1#.*+#.*+#.*+#\",\n\".*~.*>##.*N##.**##.*`#.*+#.*%#.*%#.*+#.*%#.*%#.*%#.*+#.*%#.*;vvv.*-vvv.*=vvv.*-vvv.*~.*~.*'vv.*~.*~.*Tv*&##v*(##v*(##v*2##v*(##v*(##v*(##v*(##v*(##v*(##v*'.*~.*5vvv.*)vvv.*)vvv.*-v*$##v*(##v*(##v*(##v*%.*5#.*'#.*'#.*/#.*1#.*+#.*%#.*%#.*+#.*[vv\",\n\".*~.*>##.**##.*r##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*-#*~##.*~.*B#*~##.*,##.*2##.*F##.*(##.*~.*.#*~#*B.*~..#*~##.**#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#.*7#*~##\",\n\".*~.*>##.**##.**##.*Z##.**##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*~.*~.*~.*_##.*(##.*(##.*<##.*(##.*(##.*~.*:##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*h##.*(##.*(##.*(##.*2#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#\",\n\".*~.*>##.**##.**##.**##.*B##.**##.**##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*~.*~.*~.*_##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*:##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*h##.*(##.*(##.*(##.*2#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*~.*9##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*B##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*:##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*h##.*(##.*(##.*(##.*2#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*~.*?##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*<##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*:##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*h##.*(##.*(##.*(##.*2#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*<#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*%#.*~.*?##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*<##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*:##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*h##.*(##.*(##.*(##.*2#.*'#.*'#.*'#.*'#.*'#.*'#.*)#.*%#.*%#.*%#.*%#.*%#.*%#\",\nu = 0.12308,\nm = \"A34 E34 A34 A44 F34 F44 G34 G44 E34 E44 A42 C52 E52 D52 C52 B42 A44 A42 C52 E52 D52 C52 B42 A44 F42 A42 C52 B42 B44 G#44 A42 C52 E52 A52 G52 F52 E52 D52 C52 B42 A42 G#42 A44 R4 A44 E54 F44 C54 G44 D54 E44 B44 A44 E54 F44 C54 G44 D54 E52 R1 E51 A52 C62 B52 A52 G#52 E52 F52 R1 F51 A52 C62 B52 G52 E52 D52 E52 R1 E51 A52 C62 B52 A52 G#52 E52 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A42 C52 E52 D52 C52 B42 A44 F42 A42 C52 B42 B44 G#44 A42 C52 E52 A52 G52 F52 E52 D52 A44 E54 F44 C54 G44 D54 E44 B44 A44 E54 F44 C54 E52 R1 E51 A52 C62 B52 A52 G#52 E52 F52 R1 F51 A52 C62 B52 G52 E52 D52 E52 R1 E51 A52 C62 B52 A52 G#52 E52 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A42 C52 E52 D52 C52 B42 A44 F42 A42 C52 B42 B44 G#44 A42 C52 E52 A52 G52 F52 E52 D52 A44 E54 F44 C54 G44 D54 E44 B44 A44 E54 F44 C54 G44 D54 R1 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A41 E51 A51 C61 A52 E52 F41 C51 F51 A51 F52 C52 G41 D51 G51 B51 G52 D52 E41 B41 E51 G#51 E52 B42 A42 C52 E52 D52 C52 B42 A44 F42 A42 C52 B42 B44 G#44 A42 C52 E52 A52 G52 F52 E52 D52 A44 E44 A48 R1\"\n}\n","8":"-- @Dash Demon|Demon\n-- Geometry Dash level 8: rows bottom (ground) to top, tiles see GDASH/phys.lua\n-- u = seconds per music unit, m = looping tune: note+octave+length, R<n> = rest\n-- rows are run-length coded: c*N = char c repeated byte(N)-32 times\nreturn {\n\".4.*6^.*)^^.**^*4.**^^^.*'###^^^.*,^.*)S.*)##.**##.**##.**##.**##.**##.**##.**##.**##.*,C.*'X...^^^.*-^^^.*-^^^.*-^^^.*-^^^.*1C.*'W.*+#.*7#.*)m.*%^.*%^.*+^.*%^.*'n.*%C.*'f.^*$.*.^*1.*=^^^.*)^.*.mU...^*&##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*(##^*%.n.C.*'B.*+T.^*9.*/T.^*3.*-C.*'R.*%^.*'^^.*(##.*(^*7.*)#*%^^^.*(^.*-DZ..^*&##^**##^**##^**##^**##^**##^**##^**##^**##^*'.d.C.*-w.*=^^.*(p^*%.*2^.*)^^.*/3S.*'##.*(##.*(##.*(##.*(B.*%^^^.*-^^^.*-C.4.*'DWm.*'#.*/#.*/#.*/#.*/#.*/#.*/#.*)ndC.*/^*3.*)^^.*(f.^*$.**^*-.*)^.*K\",\n\".*v###.*9g.*)##.**##.**##.**##.**##.**##.**##.**##.**##.*,g.*~.g.*'g.*+#.*7#.*Ug.*~.*;##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*2g.*~.g.*?##.*H#*%.*C##.**##.**##.**##.**##.**##.**##.**##.**##.**g.*~.*+g.*'##.*2##.*(##.*Ng.*3#.*/#.*/#.*/#.*/#.*/#.*/#.*+g\",\n\".*Na.*y##.**##.**##.**##.**##.**##.**##.**##.*~.*B#.*7#.*sh.*{##.*2##.*(##.*(##.*(##.*(##.*(##.*(##.*F#*/.*~.*+a.*q##.**##.**##.*6##.**##.**##.*vvvv.*c##.*t#.*/#.*/#.*/#.*/#.*/#.*Ea.*Wr\",\n\".*~.*V##.**##.**##.**##.**##.**##.*~.*Z#.*~.*Ce.*m##.*(##.*(##.*(##.*(##.*Zt.*I#*/.*~.*_##.*N##.*~.*$vvv\",\n\".*~.*b##.**##.**##.**##.*~.*f#.*~.*~.*=##.*<##.*~.*&t.*~.*~.*~.*?b.*%vvv.*Y##\",\n\".*Pv*..*^##.*N##.**##.*dvvv.*-vvv.*-vvv.*-vvv.*-vvv.*I#.*Gv.*Uv*-.*-vv.*~.*~.*<v*'.*=v*%.*~.*~.*_vv.**w.*;vvv.*O##.*(##.*2##.*6vvv.*-vvv.*~.*Wv*2\",\n\".*~.*>##.**##.*r##.*2#*~##.*.#.*+#.*+#.*Y#*~##.*,##.*2##.*n##.*.#*~##.*~.*~.*D#*~##.**##.*(##.*(##.*(##.*&#*P\",\n\".*~.*>##.**##.**##.*Z##.**##.*~.*B#.*+#.*+#.*~.*g##.*(##.*(##.*<##.*<##.*(##.*(##.*~.*~.*~.*~.*`##.*(##.*(##.*(##\",\n\".*~.*>##.**##.**##.**##.*B##.**##.**##.*~.*B#.*+#.*+#.*~.*g##.*(##.*(##.*(##.*(##.*(##.*(##.*2##.*(##.*(##.*~.*~.*V##.*N##.*~.*V##.*(##.*(##.*(##\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*B#.*+#.*+#.*~.*g##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*~.*J##.**##.**##.*6##.**##.**##.*~.*J##.*(##.*(##.*(##.*j#.*/#.*/#.*/#.*/#.*/#\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*B#.*+#.*+#.*~.*g##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*>##.*(##.*(##.*(##.*b#.*/#.*/#.*/#.*/#.*/#.*/#\",\n\".*~.*>##.**##.**##.**##.**##.**##.**##.**##.**##.*~.*B#.*+#.*+#.*~.*g##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*(##.*~.*~.*8v*&##v**##v**##v**##v**##v**##v**##v**##v**##v*'.*~.*7##.*(##.*(##.*(##.*b#.*/#.*/#.*/#.*/#.*/#.*/#\",\nu = 0.12308,\nm = \"E34 B34 E34 E44 F34 F44 D34 D44 E34 E44 E34 E44 F34 F44 E42 G42 B42 A42 G42 F42 E44 D42 F42 A42 G42 F44 E44 E42 G42 B42 E52 D52 C52 B42 A42 G42 F42 E42 D#42 E44 R4 E52 R1 E51 G52 B52 C62 B52 A52 G52 F52 R1 F51 A52 C62 B52 G#52 E52 B42 E52 R1 E51 G52 B52 C62 B52 A52 G52 E34 E44 F34 F44 D34 D44 E34 E44 E34 E44 F34 F44 E42 G42 B42 A42 G42 F42 E44 D42 F42 A42 G42 F44 E44 E42 G42 B42 E52 D52 C52 B42 A42 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E52 R1 E51 G52 B52 C62 B52 A52 G52 F52 R1 F51 A52 C62 B52 G#52 E52 B42 E52 R1 E51 G52 B52 C62 B52 A52 G52 E34 E44 F34 F44 D34 D44 E34 E44 E34 E44 F34 F44 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E42 G42 B42 A42 G42 F42 E44 D42 F42 A42 G42 F44 E44 E42 G42 B42 E52 D52 C52 B42 A42 E34 E44 F34 F44 D34 D44 E34 E44 E34 E44 F34 F44 D34 D44 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E41 B41 E51 G51 E52 B42 F41 C51 F51 A51 F52 C52 D41 A41 D51 F51 D52 A42 E41 G#41 B41 E51 B42 G#42 E42 G42 B42 A42 G42 F42 E44 D42 F42 A42 G42 F44 E44 E42 G42 B42 E52 D52 C52 B42 A42 E44 B34 E48 R1\"\n}\n"}/*END*/;
   var $ = function (id) { return document.getElementById(id); };
   var GY = GD.GY, CY = GD.CY, S = GD.S, PX = GD.PX;
-  var RULER = 16;
+  var RULER = 16, PERF_H = 7;  // PERF_H: performance strip under the level
 
   // ---------------- 1-bit LCD emulation ----------------
   var FONT = {
@@ -1415,6 +1456,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     if (activeTab === "music" || full) { drawRoll(); updateMusicInfo(); }
     clearTimeout(dirtyTimer);
     dirtyTimer = setTimeout(saveDraft, 400);
+    schedulePerf();
   }
   function syncFields() {
     if (document.activeElement !== $("fNum")) $("fNum").value = doc.n;
@@ -1488,7 +1530,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function viewX() { return scroller.scrollLeft / zoom + VIEW_OFF; }
   function resizeEditor() {
     ed.width = Math.max(200, ed.clientWidth || ed.parentNode.clientWidth - 12);
-    ed.height = RULER + (64 + yOff()) * zoom;
+    ed.height = RULER + (64 + yOff()) * zoom + PERF_H;
     $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
     drawEditor();
   }
@@ -1499,7 +1541,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     $("spacer").style.width = ((doc.W * 8 + 16 + 40 * 8 - VIEW_OFF) * zoom) + "px";
     var vx = viewX(), bx0 = Math.floor(vx) - 8, wpx = Math.ceil(ed.width / zoom) + 24;
     var L = GD.makeLevel(rowsOf()), yo = yOff(), cy = L.CY;
-    if (ed.height !== RULER + (64 + yo) * zoom) ed.height = RULER + (64 + yo) * zoom;
+    if (ed.height !== RULER + (64 + yo) * zoom + PERF_H) ed.height = RULER + (64 + yo) * zoom + PERF_H;
     var lcd = new Lcd(wpx, 64 + yo);
     lcd.oy = yo;
     drawBackdrop(lcd, bx0, false, cy);
@@ -1582,6 +1624,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       edctx.beginPath(); edctx.moveTo(dx - k, dy - k); edctx.lineTo(dx + k, dy + k); edctx.moveTo(dx + k, dy - k); edctx.lineTo(dx - k, dy + k); edctx.stroke();
     });
     edctx.lineWidth = 1;
+    drawPerfStrip(X, RULER + (64 + yo) * zoom, c0, c1);
     // hover
     if (hover && hover.r >= 0) {
       edctx.strokeStyle = "#ffb547"; edctx.lineWidth = 2;
@@ -1637,6 +1680,8 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     var t = hover.c < doc.W ? doc.cells[hover.r][hover.c] : ".";
     var tt = GD.TILES.filter(function (x) { return x.ch === t; })[0];
     var txt = "column " + hover.c + ", row " + (hover.r + 1) + " &middot; x = " + hover.c * 8 + " px &middot; " + (tt ? tt.name : "unknown '" + t + "'");
+    if (perf.res && perf.res.calls && hover.c >= 0 && hover.c < perf.res.cols)
+      txt += " &middot; screen here: <b>" + perf.res.calls[hover.c] + "</b> draw calls, " + perf.res.instr[hover.c] + " Lua instructions";
     if (sel) { var s = normSel(sel); txt += " &middot; selection " + (s.c1 - s.c0 + 1) + "&times;" + (s.r1 - s.r0 + 1) + " (columns " + s.c0 + "-" + s.c1 + ")"; }
     $("status").innerHTML = txt;
   }
@@ -1771,6 +1816,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
   function typing(e) { var t = e.target; return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"); }
   window.addEventListener("keydown", function (e) {
     if (play.running && handlePlayKey(e)) return;
+    if (rad.timer && radioKey(e, true)) return;
     if (typing(e)) return;
     if ((document.activeElement === roll || activeTab === "music") && rollKey(e)) return;
     var k = e.key, ctrl = e.ctrlKey || e.metaKey;
@@ -1796,6 +1842,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
       document.querySelectorAll(".panel").forEach(function (p) { p.classList.toggle("show", p.id === "p-" + activeTab); });
       if (activeTab === "export") updateExport();
       if (activeTab === "music") { drawRoll(); updateMusicInfo(); rollHome(); drawRoll(); }
+      if (activeTab !== "radio") radioStop();
     };
   });
 
@@ -1812,6 +1859,128 @@ if (typeof module !== "undefined" && module.exports) module.exports = GD;
     o.type = "square"; o.frequency.value = freq;
     g.gain.setValueAtTime(0.06, t0); g.gain.setValueAtTime(0.06, t0 + ms / 1000 - 0.004); g.gain.linearRampToValueAtTime(0, t0 + ms / 1000);
     o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + ms / 1000 + 0.01);
+  }
+
+  // ---------------- radio tab: the real game code (editors/radio/) ----------------
+  var radioOk = !!(window.fengari && window.TX12Radio && window.GDASH_FILES && window.GDMeasure);
+  var rad = { timer: null, r: null, held: false, ev: 0, prev: null, hist: [] };
+  function radioFiles() {
+    var f = {}, k;
+    for (k in window.GDASH_FILES) f[k] = window.GDASH_FILES[k];
+    f["/SCRIPTS/GAMES/GDASH/L1.lua"] = GD.exportLevel({ n: 1, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }, {});
+    return f;
+  }
+  function radioStart() {
+    if (!radioOk) { toast("The radio files are missing: keep the editors/radio folder next to this page."); return; }
+    radioStop();
+    stopMusicPreview();
+    var r = TX12Radio.create({ fengari: window.fengari, files: radioFiles(),
+      tone: function (hz, ms) { if ($("rSound").checked && hz > 0) beep(hz, Math.min(ms, 400)); } });
+    if (!r.start("/SCRIPTS/GAMES/Game-GeometryDash.lua")) { $("rMeter").textContent = r.error; return; }
+    rad.r = r; rad.ev = 2; rad.prev = new Float32Array(128 * 64); rad.hist = [];  // ENTER: start level 1 right away
+    rad.timer = setInterval(radioFrame, 50);
+    $("rc").focus();
+  }
+  function radioStop() { if (rad.timer) { clearInterval(rad.timer); rad.timer = null; } }
+  function radioFrame() {
+    var r = rad.r, e = rad.ev;
+    rad.ev = 0;
+    r.input.sa = rad.held ? 1024 : -1024;
+    var f = r.frame(e);
+    r.screen.blit($("rc").getContext("2d"), 4, rad.prev, $("rSmear").checked ? 0.55 : 0);
+    $("rLamp").classList.toggle("on", rad.held);
+    $("rThrV").textContent = "THR " + Math.round(r.input.thr / 10.24) + "%";
+    if (f.error) { radioStop(); $("rMeter").innerHTML = "<span class='bad'>" + f.error.replace(/</g, "&lt;") + "</span>"; return; }
+    if (f.exit) { radioStop(); $("rMeter").textContent = "The game quit (RTN in the level picker)."; return; }
+    rad.hist.push([f.calls, f.instr]);
+    if (rad.hist.length > 128) rad.hist.shift();
+    var g = $("rGraph").getContext("2d"), H = 70, mc = 0, mi = 0;
+    g.fillStyle = "#15181c"; g.fillRect(0, 0, 512, H);
+    g.strokeStyle = "#444b55"; g.beginPath(); g.moveTo(0, H - 160 / 4 + 0.5); g.lineTo(512, H - 160 / 4 + 0.5); g.stroke();
+    rad.hist.forEach(function (h, i) {
+      mc = Math.max(mc, h[0]); mi = Math.max(mi, h[1]);
+      g.fillStyle = "#e89a1c"; g.fillRect(i * 4, H - Math.min(H, h[0] / 4), 2, Math.min(H, h[0] / 4));
+      g.fillStyle = "#2f7de1"; g.fillRect(i * 4 + 2, H - Math.min(H, h[1] / 400), 2, Math.min(H, h[1] / 400));
+    });
+    $("rMeter").innerHTML = "this frame: <b>" + f.calls + "</b> draw calls, <b>" + f.instr + "</b> Lua instructions" +
+      (f.oob ? " &middot; <span class='bad'>" + f.oob + " writes outside the screen!</span>" : "") +
+      " &middot; last 6 s max: " + mc + " calls, " + mi + " instructions";
+  }
+  // returns true when the key was used; down = keydown (keyup handled below)
+  function radioKey(e, down) {
+    var k = e.key, r = rad.r;
+    if (typing(e) && e.target.id !== "rc") return false;
+    if (k === " " || k === "ArrowUp" || k === "w" || k === "W") { rad.held = down; e.preventDefault(); return true; }
+    if (!down) return false;
+    if (k === "Enter") rad.ev = 2;
+    else if (k === "Escape") rad.ev = 1;
+    else if (k === "ArrowRight") rad.ev = 3;
+    else if (k === "ArrowLeft") rad.ev = 4;
+    else if (k === "q" || k === "Q") r.input.thr = Math.min(1024, r.input.thr + 256);
+    else if (k === "a" || k === "A") r.input.thr = Math.max(-1024, r.input.thr - 256);
+    else if (k === "z" || k === "Z") r.input.thr = -1024;
+    else return false;
+    e.preventDefault();
+    return true;
+  }
+  window.addEventListener("keyup", function (e) { if (rad.timer) radioKey(e, false); });
+  $("rc").addEventListener("mousedown", function (e) { if (rad.timer) { rad.held = true; e.preventDefault(); } });
+  window.addEventListener("mouseup", function () { rad.held = false; });
+  $("rStart").onclick = radioStart;
+  $("rStop").onclick = radioStop;
+  if (!radioOk) $("rInfo").innerHTML = "<span class='warn'>The <code>editors/radio</code> folder is missing next to this page, so the Radio tab and the performance strip are off.</span>";
+
+  // ---------------- performance meter: every screen of the level through the real draw.lua ----------------
+  var perf = { res: null, job: null, timer: null, sig: null, prog: 0, r: null };
+  var PERF_CALLS = [110, 160], PERF_INSTR = [12000, 17000];  // green up to the first, yellow up to the second, then red
+  function perfLevel(c) {
+    var a = perf.res.calls[c], b = perf.res.instr[c];
+    return a > PERF_CALLS[1] || b > PERF_INSTR[1] ? 2 : a > PERF_CALLS[0] || b > PERF_INSTR[0] ? 1 : 0;
+  }
+  function schedulePerf() {
+    if (!radioOk) return;
+    clearTimeout(perf.timer);
+    perf.timer = setTimeout(runPerf, 700);
+  }
+  function runPerf() {
+    var src = GD.exportLevel({ n: 1, name: doc.name, diff: doc.diff, rows: rowsOf(), u: doc.u, m: doc.m }, {});
+    if (src === perf.sig) return;
+    if (perf.job) perf.job.cancel();
+    perf.sig = src; perf.prog = 0;
+    updatePerfStats(true);
+    if (!perf.r) perf.r = TX12Radio.create({ fengari: window.fengari, files: window.GDASH_FILES });
+    perf.job = GDMeasure.start(perf.r, src, function (d, t) { perf.prog = d / t; drawEditor(); }, function (res) {
+      perf.job = null;
+      if (res.error) { perf.res = null; perf.err = res.error; } else { perf.res = res; perf.err = null; }
+      drawEditor(); updatePerfStats();
+    });
+  }
+  function updatePerfStats(busy) {
+    var el = $("perfstat");
+    if (!el) { el = document.createElement("span"); el.id = "perfstat"; $("stats").parentNode.appendChild(el); }
+    if (busy) { el.innerHTML = " &middot; <span style='color:var(--dim)'>measuring every screen on the radio&hellip;</span>"; return; }
+    if (perf.err) { el.innerHTML = " &middot; <span class='bad'>meter: " + perf.err.replace(/</g, "&lt;") + "</span>"; return; }
+    if (!perf.res) { el.textContent = ""; return; }
+    var red = 0, yel = 0;
+    for (var c = 0; c < perf.res.cols; c++) { var l = perfLevel(c); if (l === 2) red++; else if (l === 1) yel++; }
+    el.innerHTML = " &middot; busiest screen: <b>" + perf.res.maxCalls + "</b> draw calls (column " + perf.res.maxCallsCol + "), <b>" +
+      perf.res.maxInstr + "</b> Lua instructions (column " + perf.res.maxInstrCol + ")" +
+      (red ? " &middot; <span class='bad'>" + red + " heavy column" + (red > 1 ? "s" : "") + "</span>" : yel ? " &middot; <span class='warn'>" + yel + " busy column" + (yel > 1 ? "s" : "") + "</span>" : " &middot; <span class='ok'>light everywhere</span>");
+  }
+  function drawPerfStrip(X, y0, c0, c1) {
+    edctx.fillStyle = "#15181c"; edctx.fillRect(0, y0, ed.width, PERF_H);
+    if (!perf.res) {
+      if (perf.job) { edctx.fillStyle = "#444b55"; edctx.fillRect(0, y0 + 2, ed.width * perf.prog, PERF_H - 4); }
+      return;
+    }
+    var COL = ["#2fae5a", "#e8b21c", "#e23b3b"];
+    edctx.globalAlpha = perf.job ? 0.4 : 1;
+    for (var c = Math.max(0, c0); c <= Math.min(c1, perf.res.cols - 1); c++) {
+      edctx.fillStyle = COL[perfLevel(c)];
+      var h = Math.max(1, Math.min(PERF_H - 1, Math.round(perf.res.calls[c] / 200 * (PERF_H - 1))));
+      edctx.fillRect(X(c * 8), y0 + PERF_H - h, Math.max(1, 8 * zoom - 1), h);
+    }
+    edctx.globalAlpha = 1;
   }
 
   // ---------------- play-test ----------------

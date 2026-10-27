@@ -34,6 +34,8 @@ cd tools/memcheck && lua5.2 memcheck.lua ../../My_TX-12/SCRIPTS/GAMES Game-X.lua
 - Every game's memcheck `live` must stay below Asteroids (about 70 KB); Geometry
   Dash aims for 65 or less. `Game-MemTest` is exempt (it fills memory on purpose).
 - Geometry Dash level or physics changes: also run `tools/gdash/solve.js`.
+- Any Geometry Dash file change: `node tools/gdash/sync-editor.js --check` (run it without
+  `--check` to refresh the editor's copy of the game and its bundled levels).
 - Before a game goes on the card, run it in `tools/edgetx-sim` (`cBoundaryHits` must be 0).
 - Known, pre-existing tx12sim results on the original card games: Breakout reports
   `ERROR 0` and Snake exits at frame 540. These are not regressions.
