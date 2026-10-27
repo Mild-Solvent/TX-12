@@ -65,6 +65,14 @@ local Player =
 
 --------------------------------------------
 
+-- EdgeTX 2.8 does not clip lines that end at x = LCD_W or y = LCD_H, nor
+-- rectangles and points at negative x/y: they write outside the screen memory.
+local function line(a,b,c,d)
+	if a >= 0 and b >= 0 and c >= 0 and d >= 0 and a <= screenW-1 and c <= screenW-1 and b <= screenH-1 and d <= screenH-1 then
+		lcd.drawLine(a,b,c,d, SOLID,0)
+	end
+end
+
 local function cleanTable(T)
 	local j = 0
 	local n = #T
@@ -371,10 +379,10 @@ local function update()
 	-- SHIP
 	if Player.energy > 0 then
 		if Player.invisible == 0 or frame%2 == 0 then 
-			lcd.drawLine(Player.x1,Player.y1, Player.x2,Player.y2, SOLID,0)
-			lcd.drawLine(Player.x2,Player.y2, Player.x3,Player.y3, SOLID,0)
-			lcd.drawLine(Player.x3,Player.y3, Player.x4,Player.y4, SOLID,0)
-			lcd.drawLine(Player.x4,Player.y4, Player.x1,Player.y1, SOLID,0)
+			line(Player.x1,Player.y1, Player.x2,Player.y2)
+			line(Player.x2,Player.y2, Player.x3,Player.y3)
+			line(Player.x3,Player.y3, Player.x4,Player.y4)
+			line(Player.x4,Player.y4, Player.x1,Player.y1)
 		end
 	end
 	
@@ -390,19 +398,19 @@ local function update()
 			n = n + 1
 		end
 		for j = 1, #C.px-1 do
-			lcd.drawLine(C.px[j],C.py[j],C.px[j+1],C.py[j+1], SOLID,0)
+			line(C.px[j],C.py[j],C.px[j+1],C.py[j+1])
 		end
-		lcd.drawLine(C.px[#C.px],C.py[#C.py],C.px[1],C.py[1], SOLID,0)
+		line(C.px[#C.px],C.py[#C.py],C.px[1],C.py[1])
 	end
 	
 	-- SHOTS
 	for i = 1, #Shots do
-		lcd.drawFilledRectangle(Shots[i].x-1,Shots[i].y-1, 3,3)
+		if Shots[i].x >= 1 and Shots[i].y >= 1 then lcd.drawFilledRectangle(Shots[i].x-1,Shots[i].y-1, 3,3) end
 	end
 
 	-- PARTICLES
 	for i = 1, #Particles do
-		lcd.drawPoint(Particles[i].x,Particles[i].y)
+		if Particles[i].x >= 0 and Particles[i].y >= 0 then lcd.drawPoint(Particles[i].x,Particles[i].y) end
 	end
 
 	-- STARS

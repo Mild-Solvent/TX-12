@@ -164,8 +164,10 @@ local function draw()
   for _, p in ipairs(pipes) do
     local x = math.floor(p.x)
     if x < LCD_W and x + PIPE_W > 0 then
-      lcd.drawFilledRectangle(x, 0, PIPE_W, p.top)
-      lcd.drawFilledRectangle(x, p.top + p.gap, PIPE_W, GROUND - p.top - p.gap)
+      local w = PIPE_W  -- clip at the left edge: EdgeTX writes outside the screen at x < 0
+      if x < 0 then w, x = w + x, 0 end
+      lcd.drawFilledRectangle(x, 0, w, p.top)
+      lcd.drawFilledRectangle(x, p.top + p.gap, w, GROUND - p.top - p.gap)
     end
   end
   lcd.drawLine(0, GROUND, LCD_W - 1, GROUND, SOLID, FORCE)

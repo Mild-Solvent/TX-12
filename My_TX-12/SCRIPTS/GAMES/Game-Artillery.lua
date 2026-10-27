@@ -293,7 +293,8 @@ local function draw()
     plot(math.floor(trailX[i]), math.floor(trailY[i]))
   end
   if state == "fly" then
-    lcd.drawFilledRectangle(math.floor(sx), math.floor(sy), 2, 2)
+    -- off-screen shells are skipped: EdgeTX writes outside the screen at x or y < 0
+    if sx >= 0 and sy >= 0 then lcd.drawFilledRectangle(math.floor(sx), math.floor(sy), 2, 2) end
   elseif state == "boom" and boomX then
     local r = math.floor(boomT / 0.4 * BLAST) + 1
     if r > BLAST + 2 then r = BLAST + 2 end
