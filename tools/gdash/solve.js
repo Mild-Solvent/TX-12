@@ -50,7 +50,8 @@ PLAY_NOW = 1
 EVT_VIRTUAL_EXIT, EVT_VIRTUAL_ENTER, EVT_VIRTUAL_NEXT, EVT_VIRTUAL_PREV = 1, 2, 3, 4
 __t, __sw = 0, 0
 function getTime() return __t end
-function getValue(n) if n == "sa" then return __sw end return 0 end
+-- thr: throttle resting at the bottom, as on the radio (Geometry Dash always reads it)
+function getValue(n) if n == "sa" then return __sw elseif n == "thr" then return -1024 end return 0 end
 function playTone() end
 collectgarbage = function() return 0 end  -- fengari has no lua_gc
 lcd = setmetatable({}, { __index = function() return function() end end })

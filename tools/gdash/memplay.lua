@@ -20,7 +20,7 @@ PLAY_NOW = 1
 EVT_VIRTUAL_EXIT, EVT_VIRTUAL_ENTER, EVT_VIRTUAL_NEXT, EVT_VIRTUAL_PREV = 1, 2, 3, 4
 local t, sw, ele = 0, 0, 0
 function getTime() return t end
-function getValue(n) if n == "sa" then return sw elseif n == "ele" then return ele end return 0 end
+function getValue(n) if n == "sa" then return sw elseif n == "ele" then return ele elseif n == "thr" then return -1024 end return 0 end  -- thr resting at the bottom
 function playTone() end
 local noop = function() end
 lcd = setmetatable({}, { __index = function() return noop end })
