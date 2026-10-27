@@ -1,7 +1,8 @@
 // levels.txt -> L<n>.lua
 // usage: node build.js <levels.txt> <out dir> [--plain]
 // Source format (see the header of levels.txt):
-//   = <n> [Name|Difficulty]   starts level n (Name|Difficulty becomes the "-- @" first line)
+//   = <n> [Name|Difficulty[|Tribute]]  starts level n (becomes the "-- @" first line; Tribute = the
+//                             official level it is modelled on, shown in the picker)
 //   ! <u> <tune>              music: seconds per unit, then the tune tokens
 //   ~<N>                      N empty columns
 //   // ...                    comment
@@ -54,7 +55,7 @@ function parse(text) {
       flush();
       const m = /^= (\d+)\s*(.*)$/.exec(l);
       const nd = (m[2] || "").split("|");
-      cur = { n: +m[1], name: nd[0] || "", diff: nd[1] || "", rows: ["", "", "", "", "", ""] };
+      cur = { n: +m[1], name: nd[0] || "", diff: nd.slice(1).join("|"), rows: ["", "", "", "", "", ""] };
       levels[cur.n] = cur; continue;
     }
     if (l.startsWith("! ")) { const p = l.slice(2).split(" "); cur.u = p[0]; cur.m = p.slice(1).join(" "); continue; }
