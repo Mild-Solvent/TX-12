@@ -126,10 +126,10 @@ local function drawMenu()
   if lastPeak then
     info = lastName .. " peak " .. math.floor(lastPeak) .. "K"
   else
-    info = math.floor(collectgarbage("count")) .. "K used"
-    if getAvailableMemory then
-      info = info .. " " .. math.floor(getAvailableMemory() / 1024) .. "K free"
-    end
+    -- 100 KB: Lua ceiling measured on the TX12 MKII. getAvailableMemory()
+    -- isn't shown: it only counts never-used memory, so it reads far too
+    -- low once anything has run (9K "free" while 88 KB more still fit)
+    info = math.floor(collectgarbage("count")) .. "K used of 100K"
   end
   lcd.drawText(LCD_W - 2, 1, info, SMLSIZE + INVERS + RIGHT)
   if #games == 0 then
