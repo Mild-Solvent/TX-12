@@ -54,8 +54,17 @@ local function window(r, w)
   end
   W[r + N], W[r + 2 * N] = "", w
   if a then
-    s = string.gsub(string.sub(s, a, i - 1), "(.)%*(.)", function(c, k) return string.rep(c, string.byte(k) - 32) end)
-    W[r + N] = string.sub(s, w - b + 1, w - b + 64)
+    -- expand "c*N" runs with a plain loop: a gsub callback can't be paused
+    -- by EdgeTX ("attempt to yield across a C-call boundary")
+    local o, j = "", a
+    while j < i do
+      if string.byte(s, j + 1) == 42 then
+        o, j = o .. string.rep(string.sub(s, j, j), (string.byte(s, j + 2) or 33) - 32), j + 3
+      else
+        o, j = o .. string.sub(s, j, j), j + 1
+      end
+    end
+    W[r + N] = string.sub(o, w - b + 1, w - b + 64)
   end
 end
 
