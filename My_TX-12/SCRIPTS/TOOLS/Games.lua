@@ -79,10 +79,24 @@ local function init()
   clean()
 end
 
+-- one line per game played: name, peak Lua heap, heap after cleanup
+local LOG = "/SCRIPTS/GAMES/peaks.log"
+local function logPeak()
+  local free = ""
+  if getAvailableMemory then free = " free " .. math.floor(getAvailableMemory() / 1024) .. "K" end
+  local ok, f = pcall(io.open, LOG, "a")
+  if ok and f then
+    pcall(io.write, f, lastName .. " peak " .. math.floor(lastPeak) .. "K after " ..
+      math.floor(collectgarbage("count")) .. "K" .. free .. "\n")
+    pcall(io.close, f)
+  end
+end
+
 local function stopGame()
   if game then lastPeak, lastName = peak, game.name end
   game = nil
   clean()
+  if lastName then logPeak() end
 end
 
 local function startGame(entry)
@@ -126,10 +140,10 @@ local function drawMenu()
   if lastPeak then
     info = lastName .. " peak " .. math.floor(lastPeak) .. "K"
   else
-    -- 100 KB: Lua ceiling measured on the TX12 MKII. getAvailableMemory()
-    -- isn't shown: it only counts never-used memory, so it reads far too
-    -- low once anything has run (9K "free" while 88 KB more still fit)
-    info = math.floor(collectgarbage("count")) .. "K used of 100K"
+    info = math.floor(collectgarbage("count")) .. "K used"
+    if getAvailableMemory then
+      info = info .. " " .. math.floor(getAvailableMemory() / 1024) .. "K free"
+    end
   end
   lcd.drawText(LCD_W - 2, 1, info, SMLSIZE + INVERS + RIGHT)
   if #games == 0 then
