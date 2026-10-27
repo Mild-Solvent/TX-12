@@ -178,6 +178,10 @@ below that, ideally under 60 KB, and keep the picker or menu of a game well unde
 - memcheck overstates the radio by about **2-2.5x** (64-bit values and debug info vs. the radio's 32-bit,
   debug-stripped code). Asteroids at 70 on memcheck is roughly 30-35 KB on the radio.
 - Rule: **every game stays below Asteroids on memcheck (under 70, aim for 65).**
+- **No Lua callbacks inside C functions** (`string.gsub(s, pat, function ... end)`, a function passed to
+  anything in C). EdgeTX pauses (yields) busy scripts, and Lua can't yield inside such a callback: the radio
+  stops the game with "attempt to yield across a C-call boundary" (Geometry Dash, 2026-10-27). Use a plain loop.
+  The simulators don't yield, so only the radio shows it.
 - **Never compile scripts right after filling RAM** (e.g. a memory test): the heap is fragmented and
   compiling can fail inside EdgeTX itself, outside any pcall, and kill the script. Measure one game per fresh run.
 
