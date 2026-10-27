@@ -1,7 +1,11 @@
 -- Geometry Dash physics, one fixed 20 ms step. Loaded only while playing:
 --   tile, step, music, endX, newPlayer, rows = loadScript(this)()(levelTable)
---   step(p, press, hold): press = new press this step (SA/SD down-edge or ENTER),
---                         hold = SA/SD held this step (a press counts as held)
+--   step(p, press, hold, st): press = new press this step (SA/SD down-edge or ENTER),
+--                         hold = SA/SD held this step (a press counts as held),
+--                         st = throttle stick getValue("thr") (nil = switch controls):
+--                         held above +10%, released below -10%; the ship and the wave
+--                         follow it in proportion, the UFO flaps every 0.56 s (middle)
+--                         to 0.2 s (top), the swing flips on every up and down move
 -- editors/geodash-editor.html has a line-by-line JavaScript copy: change both.
 -- Tile table: tools/gdash/levels.txt (header) and editors/README.md. A level has
 -- 6 to 20 rows; flying modes use the whole field. Rows stay run-length coded in
@@ -227,7 +231,7 @@ end
 
 -- speed, movement, landing, death (after x has moved)
 -- (q = was on the ground, y = y before the move)
-local function post(p, hold)
+local function post(p, hold, st)
   local s, m, g, k, q = size(p), p.m, p.g, 1, p.gr
   if p.mi then k = 0.8 end
   if p.da and not hold then p.da = false end
@@ -235,7 +239,14 @@ local function post(p, hold)
   elseif m == 4 then
     local w = p.spd
     if p.mi then w = w * 2 end
-    if hold then p.vy = -w * g else p.vy = w * g end
+    if st then p.vy = -w * g * st
+    elseif hold then p.vy = -w * g else p.vy = w * g end
+  elseif st and m == 2 then
+    -- stick ship: steer the climb rate to stick * 150, at most 600 px/s2 (mini 750)
+    local d, a = -150 * st * g - p.vy, 12
+    if p.mi then a = 15 end
+    if d > a then d = a elseif d < -a then d = -a end
+    p.vy = p.vy + d
   elseif m == 2 or m == 7 then
     local a = 600
     if m == 2 and hold then a = -700 end
@@ -326,7 +337,20 @@ local function post(p, hold)
   end
 end
 
-local function step(p, press, hold)
+local function step(p, press, hold, st)
+  if st then
+    st = st / 1000
+    if st > 1 then st = 1 elseif st < -1 then st = -1 end
+    local a, f = p.sh or false, 0.6 - 0.4 * st
+    if st > 0.1 then p.sh = true elseif st < -0.1 then p.sh = false end
+    hold = p.sh
+    press = press or (hold ~= a and (hold or p.m == 7))
+    if p.m == 1 and hold and not press then
+      p.ft = (p.ft or 0) - 0.02
+      press = p.ft <= 0
+    end
+    if press then p.ft = f end
+  end
   hold = hold or press
   if press then p.buf = 0.12; p.buf2 = 0.12
   else
@@ -338,8 +362,8 @@ local function step(p, press, hold)
   pre(p, hold)
   if p.du then swap(p); pre(p, hold); swap(p) end
   p.x = p.x + p.spd * 0.02
-  post(p, hold)
-  if p.du and not p.dead then swap(p); post(p, hold); swap(p) end
+  post(p, hold, st)
+  if p.du and not p.dead then swap(p); post(p, hold, st); swap(p) end
   if p.x >= endX and not p.dead then p.won = true end
 end
 

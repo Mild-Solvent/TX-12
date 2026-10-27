@@ -559,7 +559,8 @@ var GD = (function () {
   }
 
   // ------------------------------------------------------------------
-  // Physics: line-by-line port of GDASH/phys.lua. step(p, press, hold).
+  // Physics: line-by-line port of GDASH/phys.lua. step(p, press, hold, st).
+  // st = throttle stick getValue("thr") (undefined = switch controls), see phys.lua.
   // ------------------------------------------------------------------
   function rowTop(r) { return GY - 8 * r - 8; }
   function solid(t, r) {
@@ -718,7 +719,7 @@ var GD = (function () {
         }
       }
     }
-    function post(p, hold) {
+    function post(p, hold, st) {
       var s = size(p), m = p.m, g = p.g, k = 1, c, r, c0, c1, r0, r1, sb, wg = p.gr;
       if (p.mi) k = 0.8;
       if (p.da && !hold) p.da = false;
@@ -726,7 +727,14 @@ var GD = (function () {
       else if (m === 4) {
         var w = p.spd;
         if (p.mi) w = w * 2;
-        if (hold) p.vy = -w * g; else p.vy = w * g;
+        if (st !== undefined) p.vy = -w * g * st;
+        else if (hold) p.vy = -w * g; else p.vy = w * g;
+      } else if (st !== undefined && m === 2) {
+        // stick ship: steer the climb rate to stick * FM, at most SHD px/s2 (mini x1.25)
+        var d = -FM * st * g - p.vy, sa = SHD * DT;
+        if (p.mi) sa = sa * 1.25;
+        if (d > sa) d = sa; else if (d < -sa) d = -sa;
+        p.vy = p.vy + d;
       } else if (m === 2 || m === 7) {
         var a = SHD;
         if (m === 7) a = SWG; else if (hold) a = -SHU;
@@ -813,7 +821,20 @@ var GD = (function () {
         }
       }
     }
-    function step(p, press, hold) {
+    function step(p, press, hold, st) {
+      if (st !== undefined) {
+        st = st / 1000;
+        if (st > 1) st = 1; else if (st < -1) st = -1;
+        var sa = p.sh || false, sf = 0.6 - 0.4 * st;
+        if (st > 0.1) p.sh = true; else if (st < -0.1) p.sh = false;
+        hold = p.sh;
+        press = press || (hold !== sa && (hold || p.m === 7));
+        if (p.m === 1 && hold && !press) {
+          p.ft = (p.ft || 0) - DT;
+          press = p.ft <= 0;
+        }
+        if (press) p.ft = sf;
+      }
       hold = !!(hold || press);
       if (press) { p.buf = BUF; p.buf2 = BUF; }
       else {
@@ -825,8 +846,8 @@ var GD = (function () {
       pre(p, hold);
       if (p.du) { swap(p); pre(p, hold); swap(p); }
       p.x = p.x + p.spd * DT;
-      post(p, hold);
-      if (p.du && !p.dead) { swap(p); post(p, hold); swap(p); }
+      post(p, hold, st);
+      if (p.du && !p.dead) { swap(p); post(p, hold, st); swap(p); }
       if (p.x >= endX && !p.dead) p.won = true;
     }
     return { tile: tile, step: step, endX: endX, len: len, rows: R, N: N, CY: CY, newPlayer: newPlayer };

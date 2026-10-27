@@ -7,8 +7,12 @@
 -- Best % and attempts saved in /SCRIPTS/GAMES/gdash.dat.
 --
 -- Picker: wheel or right stick left/right = level,
---         stick up/down = normal / practice, ENTER/SA/SD = play
+--         stick up/down = normal / practice, left stick left/right = controls,
+--         ENTER/SA/SD = play
 -- Play:   SA or SD (read as held, for ship/wave/robot/dash orbs) or ENTER (tap only).
+--         With THR stick controls the throttle works too: up past the middle = held
+--         (jump), the ship and wave follow it in proportion, UFO flaps faster the
+--         higher it is, swing flips on every up/down move. SA/SD held overrides it.
 -- Practice: wheel = place checkpoint, wheel back = remove one
 -- RTN:    back to picker, RTN in picker = quit
 ---------------------------------------------------------------
@@ -20,10 +24,12 @@ local NLEV = 0
 local best, tries = {}, {}
 local tile, step, music, endX, newP, nr, draw, pick, mt
 local state, lv, prac, P, acc, pend, lastTime, deadT, cps, msg
+local ip = 0  -- controls: 0 SA/SD, 1 THR stick (GDASH/phys.lua reads the stick)
 
 local function save()
   local s = "v2\n"  -- save version; see GDASH/pick.lua
   for i = 1, NLEV do s = s .. (best[i] or 0) .. " " .. (tries[i] or 0) .. "\n" end
+  s = s .. "i" .. (ip or 0) .. "\n"
   local ok, f = pcall(io.open, "/SCRIPTS/GAMES/gdash.dat", "w")
   if ok and f then
     pcall(io.write, f, s)
@@ -36,7 +42,7 @@ local function toPick()
   collectgarbage()
   local c = loadScript(GD .. "pick.lua")
   c = c and c()
-  if c then NLEV, pick = c(best, tries) end
+  if c then NLEV, pick, ip = c(best, tries) end
   state = "pick"
 end
 
@@ -118,6 +124,8 @@ local function run(event)
   local h, j = readSw("sa")
   local a, b = readSw("sd")
   h, j = h or a, j or b or event == EVT_VIRTUAL_ENTER
+  local st  -- throttle stick, unless SA/SD is held
+  if ip == 1 and not h then st = getValue("thr") or 0 end
 
   if state == "pick" then
     if not pick then
@@ -125,7 +133,7 @@ local function run(event)
       lcd.drawText(2, 20, "GDASH/pick.lua missing", SMLSIZE)
       return 0
     end
-    lv, prac = pick(event, lv, prac, msg)
+    lv, prac, ip = pick(event, lv, prac, msg, ip)
     if j and NLEV > 0 and not msg then
       loadLevel(lv)
       if draw then startRun() else msg = "GDASH/phys/draw missing"; toPick() end
@@ -150,7 +158,7 @@ local function run(event)
     acc = acc + t
     while acc >= 2 and state == "play" do
       acc = acc - 2
-      step(P, pend, h or pend)
+      step(P, pend, h or pend, st)
       mt = mt + 0.02
       pend = false
       if P.dead or P.won then

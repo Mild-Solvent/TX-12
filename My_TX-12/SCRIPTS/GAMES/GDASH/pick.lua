@@ -1,7 +1,7 @@
 -- Geometry Dash level picker, loaded only while the picker is shown (dropped while playing).
 --   nlev, pick = loadScript(this)()(best, tries)  counts the levels, reads gdash.dat into best/tries
---   lv, prac = pick(event, lv, prac, msg)         draws one frame
-local stx, sty, hl, nm, df = 0, 0, -1, "", ""
+--   lv, prac, ip = pick(event, lv, prac, msg, ip) draws one frame (ip: 0 SA/SD, 1 THR stick)
+local stx, sty, str, hl, nm, df, ip = 0, 0, 0, -1, "", "", 0
 
 return function(best, tries)
 -- levels are counted on the card: L1, L2, ... until one is missing (max 99)
@@ -24,23 +24,26 @@ if ok and f then
       i = i + 1
       if i <= n and not (o and i <= 8) then best[i] = tonumber(b) or 0; tries[i] = tonumber(a) or 0 end
     end
+    ip = tonumber(string.match(s, "\ni(%d)")) or 0
   end
 end
 
-return n, function(event, lv, prac, msg)
-  local ax, ay = getValue("ail"), getValue("ele")
+return n, function(event, lv, prac, msg, ip)
+  local ax, ay, az = getValue("ail"), getValue("ele"), getValue("rud")
   local mv = 0
   if event == EVT_VIRTUAL_NEXT then mv = 1 elseif event == EVT_VIRTUAL_PREV then mv = -1 end
   if stx == 0 and ax > 600 then mv, stx = 1, 1 elseif stx == 0 and ax < -600 then mv, stx = -1, 1
   elseif ax > -300 and ax < 300 then stx = 0 end
   if sty == 0 and (ay > 600 or ay < -600) then prac, sty = not prac, 1
   elseif ay > -300 and ay < 300 then sty = 0 end
+  if str == 0 and (az > 600 or az < -600) then ip, str = 1 - ip, 1
+  elseif az > -300 and az < 300 then str = 0 end
   lcd.clear()
   lcd.drawText(1, 0, "GEOMETRY DASH", SMLSIZE + INVERS)
   if n == 0 or msg then
     lcd.drawText(2, 20, msg or "No levels found in", SMLSIZE)
     if not msg then lcd.drawText(2, 30, "/SCRIPTS/GAMES/GDASH/", SMLSIZE) end
-    return lv, prac
+    return lv, prac, ip
   end
   lv = lv + mv
   if lv < 1 then lv = n elseif lv > n then lv = 1 end
@@ -67,7 +70,8 @@ return n, function(event, lv, prac, msg)
   if b > 0 then lcd.drawFilledRectangle(3, 43, math.floor(b * 122 / 100), 2, FORCE) end
   if prac then lcd.drawText(2, 48, "PRACTICE (stick up/dn)", SMLSIZE)
   else lcd.drawText(2, 48, "NORMAL (stick up/dn)", SMLSIZE) end
-  lcd.drawText(2, 56, "ENTER/SA/SD play", SMLSIZE)
-  return lv, prac
-end
+  if ip == 1 then lcd.drawText(2, 56, "THR stick  (rud <>)", SMLSIZE)
+  else lcd.drawText(2, 56, "SA/SD keys (rud <>)", SMLSIZE) end
+  return lv, prac, ip
+end, ip
 end
