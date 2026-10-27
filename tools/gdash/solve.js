@@ -14,7 +14,8 @@
 //     level must be completed on the same step.
 // env: MINGAP (5) min steps between presses, MINHOLD (1) min hold steps,
 //      MINREL (3) min steps released before the next press, CAP (3000)
-//      states kept per step, NOWIN=1 skip windows, HOLDS=<dir> writes L<n>.holds
+//      states kept per step, NOWIN=1 skip windows, STRICTWIN=1 measure windows with MINGAP/MINREL
+//      between presses (default: a shifted press only needs 1 released step / 2 steps from the last press), HOLDS=<dir> writes L<n>.holds
 //      ("0"/"1" per step, for memplay.lua), EDITOR=<path> editor html.
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const { lua, lauxlib, lualib, to_luastring } = require("fengari");
@@ -26,7 +27,7 @@ const core = /<script id="gd-core">([\s\S]*?)<\/script>/.exec(html)[1];
 const ctx = { module: { exports: {} } };
 vm.runInNewContext(core, ctx);
 const GD = ctx.module.exports;
-const opts = { minGap: +(process.env.MINGAP || 5), minHold: +(process.env.MINHOLD || 1), minRelease: +(process.env.MINREL || 3), cap: +(process.env.CAP || 3000), noWindows: !!process.env.NOWIN };
+const opts = { minGap: +(process.env.MINGAP || 5), minHold: +(process.env.MINHOLD || 1), minRelease: +(process.env.MINREL || 3), cap: +(process.env.CAP || 3000), noWindows: !!process.env.NOWIN, strictWindows: !!process.env.STRICTWIN };
 
 // ---- Lua side: the real game under fengari, table library removed like on the radio
 const L = lauxlib.luaL_newstate(); lualib.luaL_openlibs(L);

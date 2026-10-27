@@ -119,6 +119,13 @@ Rhythm editor. Solo melodies and MIDI files come out clean.
 4. Eject, unplug, open the game: the new level or song is at the end of the picker.
 
 Best % (Geometry Dash) and best scores (Rhythm) are stored per number, so replacing `L3.lua` keeps L3's old best.
+(Exception: when the stock Geometry Dash levels became the long 60-90 s, 9-12 row versions, `gdash.dat` got a
+version line `v2`; a save file without it has its L1-L8 results reset once, L9 and up are kept.)
+
+The stock Geometry Dash levels are written in `tools/gdash/levels.txt` (the source; `node build.js levels.txt
+<GDASH dir>` makes `L1.lua`-`L8.lua`). Each is built like a real Geometry Dash level: a cube intro, mode sections
+behind portals (flights climb into the rows above one screen), a drop where the tune peaks, short breathers, and
+its own tune that follows the parts.
 
 ## Size
 

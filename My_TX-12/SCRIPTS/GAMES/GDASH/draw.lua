@@ -4,7 +4,7 @@
 -- Shapes are strings of 8 lines "x1y1x2y2" (digits): tiles on their 8x8 cell,
 -- icons on a 7x7 grid (scaled for mini, flipped upside down with gravity).
 -- Levels taller than 6 rows scroll: world y + oy = screen y.
-local GY, PX = 58, 28
+-- numbers inline to save RAM: ground line y 58, icon at screen x 28
 -- tile shapes in the order of TS: orbs, pads, teleport exit, spikes, slopes
 local TS = "oirqebahpkfuwt^v/`()[]"
 local SH = "11616166661616113333333333333333" .. "22525255552525222522252225222522"
@@ -34,12 +34,20 @@ local TX, TY = {}, {}  -- wave trails: world points, 1-8 main icon, 9-16 dual ic
 N = N or 6
 local cam, oy, lx = 0, 0, 0
 
+-- (k = 1, tiles and normal-size icons, skips the scaling: same pixels, far fewer instructions)
+-- (shapes pad their 8 lines by repeating the last one: a repeat is skipped, it would draw the same pixels)
 local function shape(S, i, x, y, k, fl)
+  x, y = x - 48, y - 48
+  local e, f, g, h
   for j = i, i + 28, 4 do
     local a, b, c, d = string.byte(S, j, j + 3)
-    a, b = math.floor((a - 48) * k + 0.5), math.floor((b - 48) * k + 0.5)
-    c, d = math.floor((c - 48) * k + 0.5), math.floor((d - 48) * k + 0.5)
-    if fl then b, d = fl - b, fl - d end
+    if a == e and b == f and c == g and d == h then return end
+    e, f, g, h = a, b, c, d
+    if k ~= 1 then
+      a, b = math.floor((a - 48) * k + 0.5) + 48, math.floor((b - 48) * k + 0.5) + 48
+      c, d = math.floor((c - 48) * k + 0.5) + 48, math.floor((d - 48) * k + 0.5) + 48
+    end
+    if fl then b, d = fl + 96 - b, fl + 96 - d end
     lcd.drawLine(x + a, y + b, x + c, y + d, SOLID, FORCE)
   end
 end
@@ -65,12 +73,12 @@ local function icon(P, y, g, vy, gr, still, o)
     for i = o + 1, o + 8 do TX[i] = nil end
     if (m == 0 and not still and not gr) or m == 3 or m == 5 then f = math.floor(P.x / 12) % 2 end
   end
-  shape(IC, (m * 2 + f) * 32 + 1, PX, y + oy, (s - 1) / 6, fl)
+  shape(IC, (m * 2 + f) * 32 + 1, 28, y + oy, (s - 1) / 6, fl)
 end
 
 return function(P, deadT, still, left, pct, att)
   lcd.clear()
-  cam = math.floor(P.x) - PX
+  cam = math.floor(P.x) - 28
   -- vertical camera: keep the icon between screen y 18 and 42, eased, snapped on restart
   local t = oy
   if P.y + t < 18 then t = 18 - P.y elseif P.y + t > 42 then t = 42 - P.y end
@@ -80,13 +88,13 @@ return function(P, deadT, still, left, pct, att)
   else oy = oy + (t - oy) / 3 end
   oy = math.floor(oy + 0.5)
   lx = P.x
-  local m, gy, cy = P.m, GY + oy, GY - 8 * N + oy
+  local m, gy, cy = P.m, 58 + oy, 58 - 8 * N + oy
   if gy < LCD_H then
     lcd.drawLine(0, gy, LCD_W - 1, gy, SOLID, FORCE)
     local off = cam % 16
     for i = 0, 8 do
-      local gx = i * 16 - off
-      if gx >= 0 and gx + 3 < LCD_W then lcd.drawLine(gx, gy + 1, gx + 3, LCD_H - 1, SOLID, FORCE) end
+      local sx = i * 16 - off
+      if sx >= 0 and sx + 3 < LCD_W then lcd.drawLine(sx, gy + 1, sx + 3, LCD_H - 1, SOLID, FORCE) end
     end
   end
   -- flying modes show the ceiling as a solid line, like the real game's bounds
@@ -98,13 +106,15 @@ return function(P, deadT, still, left, pct, att)
   local y0, y1 = cy, gy
   if y0 < 9 then y0 = 9 end
   if y1 > LCD_H then y1 = LCD_H end
-  local c0 = math.floor(cam / 8)
+  -- only the rows on screen (cell top from 2 to LCD_H - 1): ra .. rb
+  local c0, ra, rb = math.floor(cam / 8), math.floor((gy - LCD_H - 8) / 8) + 1, math.floor((gy - 10) / 8)
+  if ra < 0 then ra = 0 end
+  if rb > N - 1 then rb = N - 1 end
   for c = c0, c0 + 16 do
     local sx = c * 8 - cam
-    for r = 0, N - 1 do
+    for r = ra, rb do
       local top = gy - 8 * r - 8
-      local t = 46
-      if top > 1 and top < LCD_H then t = tile(c, r) end
+      local t = tile(c, r)
       if t == 35 or t == 61 then
         local h, x0, x1 = 8, sx, sx + 8
         if t == 61 then h = 4 end
@@ -124,15 +134,15 @@ return function(P, deadT, still, left, pct, att)
       end
     end
   end
-  local ex = endX - cam
-  if ex >= 0 and ex < LCD_W then lcd.drawLine(ex, y0, ex, y1 - 1, DOTTED, FORCE) end
-  local ax = 40 - cam
-  if ax > 0 and ax < LCD_W - 60 then lcd.drawText(ax, 24, "Attempt " .. att, SMLSIZE) end
+  local sx = endX - cam
+  if sx >= 0 and sx < LCD_W then lcd.drawLine(sx, y0, sx, y1 - 1, DOTTED, FORCE) end
+  sx = 40 - cam
+  if sx > 0 and sx < LCD_W - 60 then lcd.drawText(sx, 24, "Attempt " .. att, SMLSIZE) end
   if deadT then
     local d = math.floor(deadT * 40) + 2
     if d > 13 then d = 13 end
-    shape(IC, 513, PX + 3 - d, math.floor(P.y) + oy + 3 - d, d / 3, nil)
-    if P.du then shape(IC, 513, PX + 3 - d, math.floor(P.y2) + oy + 3 - d, d / 3, nil) end
+    shape(IC, 513, 31 - d, math.floor(P.y) + oy + 3 - d, d / 3, nil)
+    if P.du then shape(IC, 513, 31 - d, math.floor(P.y2) + oy + 3 - d, d / 3, nil) end
   else
     icon(P, P.y, P.g, P.vy, P.gr, still, 0)
     if P.du then icon(P, P.y2, P.g2, P.vy2, P.gr2, still, 8) end

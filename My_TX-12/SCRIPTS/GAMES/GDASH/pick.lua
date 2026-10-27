@@ -17,10 +17,12 @@ if ok and f then
   local ok2, s = pcall(io.read, f, 1200)
   pcall(io.close, f)
   if ok2 and type(s) == "string" then
-    local i = 0
+    -- "v2" first line = saved since the long levels came in; an older file's
+    -- L1-L8 results belong to the old short levels, so they start again from 0
+    local i, o = 0, string.sub(s, 1, 3) ~= "v2\n"
     for b, a in string.gmatch(s, "(%d+) (%d+)") do
       i = i + 1
-      if i <= n then best[i] = tonumber(b) or 0; tries[i] = tonumber(a) or 0 end
+      if i <= n and not (o and i <= 8) then best[i] = tonumber(b) or 0; tries[i] = tonumber(a) or 0 end
     end
   end
 end

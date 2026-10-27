@@ -170,6 +170,17 @@ roughly twice what the 32-bit radio uses, so compare games with each other, not 
 figure. Reference: **Asteroids, a stock game that runs fine on the TX12, measures 70 KB live.** Keep every game
 below that, ideally under 60 KB, and keep the picker or menu of a game well under it.
 
+### Radio calibration (measured on the TX12 MKII, 2026-10-26)
+
+- A memory fill test on the radio reached about **100 KB of Lua heap** before EdgeTX ran low. That is the
+  ceiling for one script, launcher included. `getAvailableMemory()` reported only 9 KB free at idle: it shows
+  the slack in the current heap, not the real limit.
+- memcheck overstates the radio by about **2-2.5x** (64-bit values and debug info vs. the radio's 32-bit,
+  debug-stripped code). Asteroids at 70 on memcheck is roughly 30-35 KB on the radio.
+- Rule: **every game stays below Asteroids on memcheck (under 70, aim for 65).**
+- **Never compile scripts right after filling RAM** (e.g. a memory test): the heap is fragmented and
+  compiling can fail inside EdgeTX itself, outside any pcall, and kill the script. Measure one game per fresh run.
+
 ## Testing before copying to the card
 
 `tools/tx12sim/run.js` runs every game under [fengari](https://github.com/fengari-lua/fengari)
