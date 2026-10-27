@@ -190,6 +190,24 @@ below that, ideally under 60 KB, and keep the picker or menu of a game well unde
 - **Never compile scripts right after filling RAM** (e.g. a memory test): the heap is fragmented and
   compiling can fail inside EdgeTX itself, outside any pcall, and kill the script. Measure one game per fresh run.
 
+## Open ideas (not done yet)
+
+From a review in a claude.ai chat, 2026-10-27. Each one needs measuring in
+`tools/edgetx-sim` before it changes anything on the card.
+
+- **Load `.luac` instead of compiling every launch.** The launcher loads games
+  with `loadScript(path, "Td")`, which prefers the text `.lua`, so every game is
+  compiled again on each start. That compile is the biggest memory spike at launch.
+  Loading the cached bytecode (plain `loadScript(path)`) would skip it, but error
+  messages lose line numbers. A possible middle way: load bytecode first and reload
+  with `"Td"` only to show an error.
+- **`collectgarbage("setpause", 110)` may cost frame time.** The launcher sets it so
+  garbage never piles up, but collecting this often may slow heavy games like
+  Geometry Dash. Compare frame time in the sim at 110 and at a higher pause.
+- **The launcher keeps a few bytes across `loadScript`.** The game list, names and
+  the peak log state stay alive while a game runs. Small, but worth trimming if a
+  game is right at the limit.
+
 ## Testing before copying to the card
 
 `tools/tx12sim/run.js` runs every game under [fengari](https://github.com/fengari-lua/fengari)
