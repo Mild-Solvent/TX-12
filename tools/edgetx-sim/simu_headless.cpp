@@ -30,6 +30,8 @@ extern "C" {
 extern unsigned simuLuaCBoundaryHits, simuLuaBudgetYields, simuLuaMaxCycleInstr;
 extern unsigned simuLuaBudget;
 extern char simuLuaCBoundaryWhere[];
+extern unsigned simuLcdOobHits;
+extern char simuLcdOobWhere[];
 
 static int16_t simSticks[4] = {0, 0, 0, 0};
 static std::string outDir = ".";
@@ -143,6 +145,7 @@ int main(int argc, char ** argv)
   printf("STATS luaMemPeak=%u luaMemNow=%u cap=%u allocFails=%u cBoundaryHits=%u budgetYields=%u maxCycleInstr=%u\n",
          (unsigned)simuLuaMemPeak, (unsigned)simuLuaMem, (unsigned)simuLuaMemCap, simuLuaMemFail,
          simuLuaCBoundaryHits, simuLuaBudgetYields, simuLuaMaxCycleInstr);
+  if (simuLcdOobHits) printf("LCDOOB hits=%u at %s\n", simuLcdOobHits, simuLcdOobWhere);
   if (simuLuaCBoundaryHits) printf("CBOUNDARY first at %s\n", simuLuaCBoundaryWhere);
   fflush(stdout);
   _exit(0);   // the firmware threads don't need a clean shutdown

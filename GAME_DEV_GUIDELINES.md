@@ -108,6 +108,11 @@ frame at the capped `dt`.
 - `SMLSIZE` text is about 6 px per character: ~21 characters per line, 8 px
   line height. Long strings run off the edge, so wrap them yourself.
 - Coordinates must be numbers; `math.floor` positions you computed from `dt`.
+- **Keep every drawing call on the screen.** EdgeTX 2.8 does not clip `lcd.drawFilledRectangle` and
+  `lcd.drawPoint` at negative x or y, nor `lcd.drawLine` ending exactly at x = LCD_W or y = LCD_H. The
+  radio then writes outside the screen memory (stray pixels, memory corruption, resets). Clip yourself:
+  shrink a rectangle that starts left of the screen, skip shapes that are off it. Found by the EdgeTX
+  simulator in Asteroids, Artillery and Flappy (2026-10-27); it reports `LCDOOB ... at file:line`.
 
 ## Memory
 
