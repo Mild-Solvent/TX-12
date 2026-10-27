@@ -36,8 +36,6 @@ return n, function(event, lv, prac, msg, ip)
   elseif ax > -300 and ax < 300 then stx = 0 end
   if sty == 0 and (ay > 600 or ay < -600) then prac, sty = not prac, 1
   elseif ay > -300 and ay < 300 then sty = 0 end
-  if str == 0 and (az > 600 or az < -600) then ip, str = 1 - ip, 1
-  elseif az > -300 and az < 300 then str = 0 end
   lcd.clear()
   lcd.drawText(1, 0, "GEOMETRY DASH", SMLSIZE + INVERS)
   if n == 0 or msg then
@@ -70,8 +68,7 @@ return n, function(event, lv, prac, msg, ip)
   if b > 0 then lcd.drawFilledRectangle(3, 43, math.floor(b * 122 / 100), 2, FORCE) end
   if prac then lcd.drawText(2, 48, "PRACTICE (stick up/dn)", SMLSIZE)
   else lcd.drawText(2, 48, "NORMAL (stick up/dn)", SMLSIZE) end
-  if ip == 1 then lcd.drawText(2, 56, "THR stick  (rud <>)", SMLSIZE)
-  else lcd.drawText(2, 56, "SA/SD keys (rud <>)", SMLSIZE) end
+  lcd.drawText(2, 56, "L stick up or SA/SD", SMLSIZE)
   return lv, prac, ip
 end, ip
 end

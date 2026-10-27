@@ -7,10 +7,10 @@
 -- Best % and attempts saved in /SCRIPTS/GAMES/gdash.dat.
 --
 -- Picker: wheel or right stick left/right = level,
---         stick up/down = normal / practice, left stick left/right = controls,
+--         stick up/down = normal / practice,
 --         ENTER/SA/SD = play
 -- Play:   SA or SD (read as held, for ship/wave/robot/dash orbs) or ENTER (tap only).
---         With THR stick controls the throttle works too: up past the middle = held
+--         The left stick (throttle) always works too: up past the middle = held
 --         (jump), the ship and wave follow it in proportion, UFO flaps faster the
 --         higher it is, swing flips on every up/down move. SA/SD held overrides it.
 -- Practice: wheel = place checkpoint, wheel back = remove one
@@ -125,7 +125,7 @@ local function run(event)
   local a, b = readSw("sd")
   h, j = h or a, j or b or event == EVT_VIRTUAL_ENTER
   local st  -- throttle stick, unless SA/SD is held
-  if ip == 1 and not h then st = getValue("thr") or 0 end
+  if not h then st = getValue("thr") or 0 end
 
   if state == "pick" then
     if not pick then
