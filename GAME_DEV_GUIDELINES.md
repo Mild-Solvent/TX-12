@@ -101,6 +101,10 @@ frame at the capped `dt`.
   treats a position held for 0.5 s as the new rest. That makes it work for
   both spring-loaded buttons and ordinary toggles.
 - "Either stick moves": take whichever of `ail` / `rud` is further from centre.
+- **Positions from switches** (Egg Chef): on father's radio SB, SC, SE and SF are 3-position, SA and SD
+  are 2-position (`RADIO/radio.yml`). Egg Chef reads two switches as "side" and "high/low" (or one switch
+  per side) and acts only when a switch *changes*, so the sticks can move the pan too; the middle position
+  leaves the pan where it is. The layouts are a `MODES` table at the top of the file, easy to add to.
 
 ## Drawing
 

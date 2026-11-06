@@ -14,7 +14,7 @@ local KNOWN = {
   "Game-2048.lua", "Game-Artillery.lua", "Game-Asteroids.lua",
   "Game-Battleship.lua", "Game-Blackjack.lua", "Game-Breakout.lua",
   "Game-CrossyRoad.lua", "Game-Dino.lua", "Game-DonkeyKong.lua",
-  "Game-DoodleJump.lua", "Game-Flappy.lua", "Game-GeometryDash.lua",
+  "Game-DoodleJump.lua", "Game-EggChef.lua", "Game-Flappy.lua", "Game-GeometryDash.lua",
   "Game-Invaders.lua", "Game-MemTest.lua", "Game-Minesweeper.lua", "Game-PacMan.lua",
   "Game-Pinball.lua", "Game-Plinko.lua", "Game-Poker.lua", "Game-Pong.lua",
   "Game-Racer.lua", "Game-Rhythm.lua", "Game-Simon.lua",
